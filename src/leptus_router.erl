@@ -40,8 +40,7 @@
 %% API
 %% -----------------------------------------------------------------------------
 -spec paths(leptus:handlers()) -> routes().
-paths(Handlers) ->
-    handle_routes(Handlers, []).
+paths(Handlers) -> handle_routes(Handlers, []).
 
 %% -----------------------------------------------------------------------------
 %% order routes the way it matters in cowboy
@@ -49,55 +48,45 @@ paths(Handlers) ->
 -spec sort_dispatch(Dispatch) -> Dispatch when Dispatch :: dispatch().
 sort_dispatch(Dispatch) ->
     %% merge duplicate HostMatches
-    F = fun(E = {HostMatch, _, Paths}, Acc) ->
-                case lists:keyfind(HostMatch, 1, Acc) of
-                    {HostMatch, Constraints, Paths1} ->
-                        lists:keystore(HostMatch, 1, Acc, {HostMatch,
-                                                           Constraints,
-                                                           Paths1 ++ Paths});
-                    _ ->
-                        [E|Acc]
-                end
-        end,
-    Dispatch1 = lists:foldr(F, [], Dispatch),
-    sort_dispatch(Dispatch1, []).
+    sort_dispatch(lists:foldr(fun({HostMatch, _, Paths} = E, Acc) ->
+                                  case lists:keyfind(HostMatch, 1, Acc) of
+                                      {_, Constraints, Paths1} ->
+                                          lists:keystore(HostMatch, 1, Acc, {HostMatch, Constraints, Paths1 ++ Paths});
+                                      _ -> [E|Acc]
+                                  end
+                              end, [], Dispatch),
+                  []).
 
 %% -----------------------------------------------------------------------------
 %% make routes to serve static files using cowboy static handler
 %% -----------------------------------------------------------------------------
 static_file_routes({HostMatch, {priv_dir, App, Dir}}) ->
-    Dir1 = filename:join(leptus_utils:priv_dir(App), Dir),
-    static_file_routes({HostMatch, Dir1});
+    static_file_routes({HostMatch, filename:join(leptus_utils:priv_dir(App), Dir)});
 static_file_routes({HostMatch, Dir}) ->
-    Files = static_files(Dir),
-    F = fun(E, Acc) ->
-                Acc1 = [static_route("/" ++ E, filename:join(Dir, E))|Acc],
-                case is_index_file(E) of
-                    true ->
-                        [static_route(index_url(E), filename:join(Dir, E))|Acc1];
-                    false ->
-                        Acc1
-                end
-        end,
-    [{HostMatch, lists:foldr(F, [], Files)}].
+    [{HostMatch, lists:foldr(fun(E, Acc) ->
+                                 F = filename:join(Dir, E),
+                                 SR = static_route("/" ++ E, F),
+                                 case is_index_file(E) of
+                                     true -> [static_route(index_url(E), F), SR|Acc];
+                                     false -> [SR|Acc]
+                                 end
+                             end, [], static_files(Dir))}].
 
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
-handle_routes([], Acc) ->
-    Acc;
+handle_routes([], Acc) -> Acc;
 handle_routes([{HostMatch, X}|T], Acc) ->
     %% each module must have routes/0 -> [string()].
-    F = fun({Handler, State}, AccIn) ->
-                Prefix = handler_prefix(Handler),
-                AccIn ++ [new_route(Prefix, Route, Handler, State) ||
-                             Route <- Handler:routes()]
-        end,
-    handle_routes(T, Acc ++ [{HostMatch, lists:foldl(F, [], X)}]).
+    handle_routes(T,
+                  Acc ++ [{HostMatch,
+                           lists:foldl(fun({Handler, State}, AccIn) ->
+                                           AccIn ++ [new_route(handler_prefix(Handler),
+                                                               Route, Handler, State) || Route <- Handler:routes()]
+                                       end, [], X)}]).
 
 new_route(Prefix, Route, Handler, HandlerState) ->
-    {Prefix ++ Route, leptus_handler, #resrc{route=Route, handler=Handler,
-                                             handler_state=HandlerState}}.
+    {Prefix ++ Route, leptus_handler, #resrc{route = Route, handler = Handler, handler_state = HandlerState}}.
 
 %% -----------------------------------------------------------------------------
 %% get handler's prefix
@@ -113,27 +102,19 @@ handler_prefix(Handler) ->
         error:undef -> ""
     end.
 
-sort_dispatch([], Acc) ->
-    Acc;
-sort_dispatch([{HM, C, PathRules}|Rest], Acc) ->
-    sort_dispatch(Rest, Acc ++ [{HM, C, sort_path_rules(PathRules)}]).
+sort_dispatch([], Acc) -> Acc;
+sort_dispatch([{HM, C, PathRules}|Rest], Acc) -> sort_dispatch(Rest, Acc ++ [{HM, C, sort_path_rules(PathRules)}]).
 
 -spec sort_path_rules([path_rule()]) -> [path_rule()].
-sort_path_rules([]) ->
-    [];
+sort_path_rules([]) -> [];
 sort_path_rules([Pivot|Rest]) ->
     Y = segments_length(Pivot),
-    sort_path_rules([PathRule || PathRule <- Rest, lt(PathRule, Y)])
-        ++ [Pivot] ++
-        sort_path_rules([PathRule || PathRule <- Rest, egt(PathRule, Y)]).
+    sort_path_rules([PathRule || PathRule <- Rest, lt(PathRule, Y)]) ++
+        [Pivot|sort_path_rules([PathRule || PathRule <- Rest, egt(PathRule, Y)])].
 
 -spec segments_length(path_rule()) -> integer().
 segments_length({['...'], _, _, _}) -> -1;
-segments_length({Segments, _, _, _}) ->
-    F = fun(Segment, N) ->
-                N + segment_val(Segment)
-        end,
-    lists:foldl(F, 0, Segments).
+segments_length({Segments, _, _, _}) -> lists:foldl(fun(Segment, N) -> N + segment_val(Segment) end, 0, Segments).
 
 segment_val(A) when is_atom(A) -> 1;
 segment_val(_) -> 0.5.
@@ -162,16 +143,12 @@ egt(PathRule, Y) ->
 %% collect static file names
 %% -----------------------------------------------------------------------------
 static_files(Dir) ->
-    Files = filelib:fold_files(Dir, ".*", true, fun(F, Acc) -> [F|Acc] end, []),
     DirComponentsLength = length(filename:split(Dir)),
-    F = fun(File, Acc) ->
-                FileComponents = filename:split(File),
-                FileComponentsLength = length(FileComponents),
-                [filename:join(lists:sublist(FileComponents,
-                                             DirComponentsLength + 1,
-                                             FileComponentsLength))|Acc]
-        end,
-    lists:usort(lists:foldr(F, [], Files)).
+    lists:usort(lists:foldl(fun(File, Acc) ->
+                                FileComponents = filename:split(File),
+                                [filename:join(lists:sublist(FileComponents, DirComponentsLength + 1,
+                                                             length(FileComponents)))|Acc]
+                            end, [], filelib:fold_files(Dir, ".*", true, fun(F, Acc) -> [F|Acc] end, []))).
 
 %% -----------------------------------------------------------------------------
 %% check if a file is an index file
@@ -195,5 +172,4 @@ index_url(File) ->
 %% -----------------------------------------------------------------------------
 %% cowboy static handler
 %% -----------------------------------------------------------------------------
-static_route(Path, File) ->
-    {Path, cowboy_static, {file, File}}.
+static_route(Path, File) -> {Path, cowboy_static, {file, File}}.
