@@ -29,21 +29,17 @@ parse_transform(AST, _Options) ->
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
-walk_ast([], Acc, _) ->
-    Acc;
+walk_ast([], Acc, _) -> Acc;
 %% -----------------------------------------------------------------------------
 %% export routes/0 and allowed_methods/1
 %% -----------------------------------------------------------------------------
-walk_ast([{attribute, L, module, _}=Form|Rest], Acc, Routes) ->
-    ExportForm = {attribute, L, export, [{routes, 0}, {allowed_methods, 1}]},
-    walk_ast(Rest, Acc ++ [Form] ++ [ExportForm], Routes);
+walk_ast([{attribute, L, module, _} = Form|Rest], Acc, Routes) ->
+    walk_ast(Rest, Acc ++ [Form, {attribute, L, export, [{routes, 0}, {allowed_methods, 1}]}], Routes);
 %% -----------------------------------------------------------------------------
 %% collect routes
 %% -----------------------------------------------------------------------------
-walk_ast([{function, _, Method, 3, _}=Form|Rest], Acc, Routes)
-  when Method =:= get; Method =:= put; Method =:= post; Method =:= delete ->
-    Routes1 = check_clauses(Form),
-    walk_ast(Rest, Acc ++ [Form], Routes ++ Routes1);
+walk_ast([{function, _, M, 3, _} = Form|Rest], Acc, Routes) when M =:= get; M =:= put; M =:= post; M =:= delete ->
+    walk_ast(Rest, Acc ++ [Form], Routes ++ check_clauses(Form));
 %% -----------------------------------------------------------------------------
 %% add routes/0 to the module
 %% i.e. routes() -> [Route]
@@ -51,54 +47,42 @@ walk_ast([{function, _, Method, 3, _}=Form|Rest], Acc, Routes)
 %% add allowed_methods/1 to the module
 %% e.g. allowed_methods("/") -> [<<"GET">>, <<"PUT">>]
 %% -----------------------------------------------------------------------------
-walk_ast([{eof, L}=Form|Rest], Acc, Routes) ->
-    F = fun({Route, Method}, AccIn) ->
-                case lists:keyfind(Route, 1, AccIn) of
-                    {Route, Methods} ->
-                        lists:keystore(Route, 1, AccIn,
-                                       {Route, [Method|Methods]});
-                    _ ->
-                        [{Route, [Method]}|AccIn]
-                end
-        end,
+walk_ast([{eof, L} = Form|Rest], Acc, Routes) ->
     %% [{string(), [binary()]}]
-    RoutesNMethods = lists:usort(lists:foldr(F, [], Routes)),
-
-    %% [string()]
-    Routes1 = [Route || {Route, _} <- RoutesNMethods],
-
-    %% routes() -> [Route]
-    Routes0Spec = {attribute, L, spec,
-                   {{routes, 0},
-                    [{type, L, 'fun', [{type, L, product, []}, {type, L, list, [{type, L, string, []}]}]}]}},
-    Routes0Fun = {function, L, routes, 0,
-                  [{clause, L, [], [],
-                    [erl_parse:abstract(Routes1, [{line, L}])]}]},
-
-    %% allowed_methods(Route) -> [binary()]
-    AllowedMethods1Spec = {attribute, L, spec,
-                           {{allowed_methods, 1},
-                            [{type, L, 'fun',
-                              [{type, L, product, [{ann_type, L, [{var, L, 'Route'}, {type, L, string, []}]}]},
-                               {type, L, list, [{type, L, binary, []}]}]}]}},
-    AllowedMethods1Fun = {function, L, allowed_methods, 1,
-                          [{clause, L, [{string, L, Route}], [],
-                            [erl_parse:abstract(Methods, [{line, L}])]}
-                           || {Route, Methods} <- RoutesNMethods]},
-    walk_ast(Rest, Acc ++ [Routes0Spec, Routes0Fun, AllowedMethods1Spec, AllowedMethods1Fun, Form], Routes);
-walk_ast([Form|Rest], Acc, Routes) ->
-    walk_ast(Rest, Acc ++ [Form], Routes).
+    RoutesNMethods = lists:usort(lists:foldl(fun({Route, Method}, AccIn) ->
+                                                 case lists:keyfind(Route, 1, AccIn) of
+                                                     {_, Methods} ->
+                                                         lists:keystore(Route, 1, AccIn, {Route, [Method|Methods]});
+                                                     _ -> [{Route, [Method]}|AccIn]
+                                                 end
+                                             end, [], Routes)),
+    walk_ast(Rest,
+             Acc ++ [{attribute, L, spec,
+                      {{routes, 0},
+                       [{type, L, 'fun', [{type, L, product, []}, {type, L, list, [{type, L, string, []}]}]}]}},
+                     {function, L, routes, 0,
+                      [{clause, L, [], [], [erl_parse:abstract([Route || {Route, _} <- RoutesNMethods], [{line, L}])]}]},
+                     {attribute, L, spec,
+                      {{allowed_methods, 1},
+                       [{type, L, 'fun',
+                         [{type, L, product, [{ann_type, L, [{var, L, 'Route'}, {type, L, string, []}]}]},
+                          {type, L, list, [{type, L, binary, []}]}]}]}},
+                     {function, L, allowed_methods, 1,
+                      [{clause, L, [{string, L, Route}], [],
+                        [erl_parse:abstract(Methods, [{line, L}])]} || {Route, Methods} <- RoutesNMethods]},
+                     Form],
+             Routes);
+walk_ast([Form|Rest], Acc, Routes) -> walk_ast(Rest, Acc ++ [Form], Routes).
 
 %% -----------------------------------------------------------------------------
 %% check functions' head
 %% -----------------------------------------------------------------------------
 check_clauses({function, _, Method, 3, Clauses}) ->
     M = http_method(Method),
-    lists:map(fun(R) -> {R, M} end,
-              lists:map(fun({clause, _, [{string, _, Route}|_], _, _}) -> Route;
-                           ({clause, _, [{match, _, {string, _, Route}, _}|_], _, _}) -> Route;
-                           ({clause, _, [{match, _, _, {string, _, Route}}|_], _, _}) -> Route
-                        end, Clauses)).
+    lists:map(fun({clause, _, [{string, _, Route}|_], _, _}) -> {Route, M};
+                 ({clause, _, [{match, _, {string, _, Route}, _}|_], _, _}) -> {Route, M};
+                 ({clause, _, [{match, _, _, {string, _, Route}}|_], _, _}) -> {Route, M}
+              end, Clauses).
 
 http_method(get) -> <<"GET">>;
 http_method(put) -> <<"PUT">>;
