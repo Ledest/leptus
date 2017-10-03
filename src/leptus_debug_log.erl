@@ -35,44 +35,34 @@
 
 -define(LOG_FORMAT, "~h ~l ~u ~t \"~r\" ~s ~B \"~{referer}\" \"~{user-agent}\"").
 
-init(default) ->
-    {ok, ?LOG_FORMAT};
-init(LogFmt) ->
-    {ok, LogFmt}.
+init(default) -> {ok, ?LOG_FORMAT};
+init(LogFmt) -> {ok, LogFmt}.
 
-handle_event({debug_log, LogData}, LogFmt) ->
-    Log = leptus_logger:format(LogFmt, LogData),
-    console_log(LogData#log_data.status, Log),
+handle_event({debug_log, #log_data{status = Status} = LogData}, LogFmt) ->
+    console_log(Status, leptus_logger:format(LogFmt, LogData)),
     {ok, LogFmt};
-handle_event(_, LogFmt) ->
-    {ok, LogFmt}.
+handle_event(_, LogFmt) -> {ok, LogFmt}.
 
-handle_call(_Request, LogFmt) ->
-    {ok, ok, LogFmt}.
+handle_call(_Request, LogFmt) -> {ok, ok, LogFmt}.
 
-handle_info(_Info, LogFmt) ->
-    {ok, LogFmt}.
+handle_info(_Info, LogFmt) -> {ok, LogFmt}.
 
-terminate(_Args, _LogFmt) ->
-    ok.
+terminate(_Args, _LogFmt) -> ok.
 
-code_change(_OldVsn, LogFmt, _Extra) ->
-    {ok, LogFmt}.
+code_change(_OldVsn, LogFmt, _Extra) -> {ok, LogFmt}.
 
 %% -----------------------------------------------------------------------------
 %% print request date-time, requested URI, response status and content-length
 %% -----------------------------------------------------------------------------
 -spec console_log(leptus_logger:status_code(), string()) -> ok.
-console_log(Status, FormatedLog) ->
-    Color = status_color(Status),
-    io:format("~s~s\e[0m~n", [Color, FormatedLog]).
+console_log(Status, FormatedLog) -> io:put_chars([status_color(Status), FormatedLog, "\e[0m\n"]).
 
 %% -----------------------------------------------------------------------------
 %% get terminal color escape code based on status code
 %% -----------------------------------------------------------------------------
 -spec status_color(non_neg_integer()) -> string().
-status_color(N) when N >= 200, N < 300 -> "\e[32m"; %% green
-status_color(N) when N >= 300, N < 400 -> "\e[34m"; %% blue
-status_color(N) when N >= 400, N < 500 -> "\e[31m"; %% red
 status_color(N) when N >= 500 -> "\e[1m\e[31m"; %% bold red
+status_color(N) when N >= 400 -> "\e[31m"; %% red
+status_color(N) when N >= 300 -> "\e[34m"; %% blue
+status_color(N) when N >= 200 -> "\e[32m"; %% green
 status_color(_) -> "".
