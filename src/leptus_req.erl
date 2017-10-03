@@ -62,55 +62,43 @@
 %% API
 %% -----------------------------------------------------------------------------
 -spec start_link(cowboy_req:req()) -> {ok, pid()} | ignore | {error, any()}.
-start_link(Req) ->
-    gen_server:start_link(?MODULE, Req, []).
+start_link(Req) -> gen_server:start_link(?MODULE, Req, []).
 
 -spec start(cowboy_req:req()) -> {ok, pid()} | ignore | {error, any()}.
-start(Req) ->
-    gen_server:start(?MODULE, Req, []).
+start(Req) -> gen_server:start(?MODULE, Req, []).
 
 -spec stop(pid()) -> ok.
-stop(Pid) ->
-    gen_server:call(Pid, stop).
+stop(Pid) -> gen_server:call(Pid, stop).
 
 -spec param(pid(), atom()) -> binary() | undefined.
-param(Pid, Key) ->
-    invoke(Pid, binding, [Key]).
+param(Pid, Key) -> invoke(Pid, binding, [Key]).
 
 -spec params(pid()) -> [{atom(), binary()}] | undefined.
-params(Pid) ->
-    invoke(Pid, bindings, []).
+params(Pid) -> invoke(Pid, bindings, []).
 
 -spec qs(pid()) -> binary().
-qs(Pid) ->
-    invoke(Pid, qs, []).
+qs(Pid) -> invoke(Pid, qs, []).
 
 -spec qs_val(pid(), binary()) -> binary() | undefined.
-qs_val(Pid, Key) ->
-    invoke(Pid, qs_val, [Key]).
+qs_val(Pid, Key) -> invoke(Pid, qs_val, [Key]).
 
 -spec qs_vals(pid()) -> [{binary(), binary() | true}].
-qs_vals(Pid) ->
-    invoke(Pid, qs_vals, []).
+qs_vals(Pid) -> invoke(Pid, qs_vals, []).
 
 -spec uri(pid()) -> binary().
 uri(Pid) ->
     Path = invoke(Pid, path, []),
-    QS = qs(Pid),
-
     %% e.g <<"/path?query=string">>
-    case QS of
+    case qs(Pid) of
         <<>> -> Path;
-        _ -> <<Path/binary, "?", QS/binary>>
+        QS -> <<Path/binary, "?", QS/binary>>
     end.
 
 -spec version(pid()) -> cowboy:http_version().
-version(Pid) ->
-    invoke(Pid, version, []).
+version(Pid) -> invoke(Pid, version, []).
 
 -spec method(pid()) -> binary().
-method(Pid) ->
-    invoke(Pid, method, []).
+method(Pid) -> invoke(Pid, method, []).
 
 -spec body(pid()) -> binary() | [{binary(), binary() | true}] | jsx:json_term() | term().
 body(Pid) ->
@@ -135,107 +123,78 @@ body(Pid) ->
     end.
 
 -spec body_raw(pid()) -> binary().
-body_raw(Pid) ->
-    invoke(Pid, body, []).
+body_raw(Pid) -> invoke(Pid, body, []).
 
 -spec body_qs(pid()) -> [{binary(), binary() | true}].
-body_qs(Pid) ->
-    invoke(Pid, body_qs, []).
+body_qs(Pid) -> invoke(Pid, body_qs, []).
 
 -spec header(pid(), binary()) -> binary() | undefined.
-header(Pid, Name) ->
-    invoke(Pid, header, [Name]).
+header(Pid, Name) -> invoke(Pid, header, [Name]).
 
 -spec header(pid(), binary(), Default) -> binary() | Default when Default :: any().
-header(Pid, Name, Default) ->
-    invoke(Pid, header, [Name, Default]).
+header(Pid, Name, Default) -> invoke(Pid, header, [Name, Default]).
 
 -spec parse_header(pid(), binary()) -> any() | undefined | {error, any()}.
-parse_header(Pid, Name) ->
-    invoke(Pid, parse_header, [Name, undefined]).
+parse_header(Pid, Name) -> invoke(Pid, parse_header, [Name, undefined]).
 
 -spec auth(pid(), basic) -> {binary(), binary()} | undefined | {error, any()}.
 auth(Pid, basic) ->
     case parse_header(Pid, <<"authorization">>) of
-        {<<"basic">>, UserPass} ->
-            UserPass;
-        Value ->
-            Value
+        {<<"basic">>, UserPass} -> UserPass;
+        UserPass -> UserPass
     end.
 
 -spec peer(pid()) -> {inet:ip_address(), inet:port_number()}.
-peer(Pid) ->
-    invoke(Pid, peer, []).
+peer(Pid) -> invoke(Pid, peer, []).
 
 -spec reply(pid(), cowboy:http_status(), cowboy:http_headers(), iodata()) -> ok.
-reply(Pid, Status, Headers, Body) ->
-    invoke(Pid, reply, [Status, Headers, Body]).
+reply(Pid, Status, Headers, Body) -> invoke(Pid, reply, [Status, Headers, Body]).
 
 -spec get_req(pid()) -> cowboy_req:req().
-get_req(Pid) ->
-    gen_server:call(Pid, get_req).
+get_req(Pid) -> gen_server:call(Pid, get_req).
 
 -spec set_req(pid(), cowboy_req:req()) -> ok.
-set_req(Pid, Req) ->
-    gen_server:cast(Pid, {set_req, Req}).
+set_req(Pid, Req) -> gen_server:cast(Pid, {set_req, Req}).
 
 %% -----------------------------------------------------------------------------
 %% gen_server callbacks
 %% -----------------------------------------------------------------------------
-init(Req) ->
-    {ok, Req}.
+init(Req) -> {ok, Req}.
 
-handle_call(stop, _From, Req) ->
-    {stop, shutdown, ok, Req};
-handle_call(get_req, _From, Req) ->
-    {reply, Req, Req};
+handle_call(stop, _From, Req) -> {stop, shutdown, ok, Req};
+handle_call(get_req, _From, Req) -> {reply, Req, Req};
 handle_call({F, A}, _From, Req) ->
     {Value, Req1} = case call_cowboy_req(F, A, Req) of
-                        Err = {error, _} -> {Err, Req};
-                        Else -> Else
+                        {error, _} = E -> {E, Req};
+                        E -> E
                     end,
     {reply, Value, Req1}.
 
-handle_cast({set_req, NewReq}, _Req) ->
-    {noreply, NewReq};
-handle_cast(_Msg, Req) ->
-    {noreply, Req}.
+handle_cast({set_req, NewReq}, _Req) -> {noreply, NewReq};
+handle_cast(_Msg, Req) -> {noreply, Req}.
 
-handle_info(_Info, Req) ->
-    {noreply, Req}.
+handle_info(_Info, Req) -> {noreply, Req}.
 
-terminate(_Reason, _Req) ->
-    ok.
+terminate(_Reason, _Req) -> ok.
 
-code_change(_OldVsn, Req, _Extra) ->
-    {ok, Req}.
+code_change(_OldVsn, Req, _Extra) -> {ok, Req}.
 
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
 -spec invoke(pid(), atom(), [any()]) -> any().
-invoke(Pid, F, A) ->
-    gen_server:call(Pid, {F, A}).
+invoke(Pid, F, A) -> gen_server:call(Pid, {F, A}).
 
 -spec call_cowboy_req(atom(), [any()], cowboy_req:req()) -> any().
-call_cowboy_req(reply, Args, Req) ->
-    call_cowboy_req(reply, Args ++ [Req]);
-call_cowboy_req(F, [], Req) ->
-    call_cowboy_req(F, [Req]);
-call_cowboy_req(F, [H|T], Req) ->
-    A = [H] ++ [Req|T],
-    call_cowboy_req(F, A).
+call_cowboy_req(reply, Args, Req) -> call_cowboy_req(reply, Args ++ [Req]);
+call_cowboy_req(F, [], Req) -> call_cowboy_req(F, [Req]);
+call_cowboy_req(F, [H|T], Req) -> call_cowboy_req(F, [H, Req|T]).
 
 -spec call_cowboy_req(atom(), [any()]) -> any().
-call_cowboy_req(F, A) ->
-    get_vr(apply(cowboy_req, F, A)).
+call_cowboy_req(F, A) -> get_vr(apply(cowboy_req, F, A)).
 
 %% get value and req
 -spec get_vr({atom(), any(), cowboy_req:req()} | {any(), cowboy_req:req()}) ->
                     {any(), cowboy_req:req()}.
-get_vr(Res={_, _}) ->
-    Res;
-get_vr({ok, Value, Req}) ->
-    {Value, Req};
-get_vr({undefined, Value, Req}) ->
-    {Value, Req}.
+get_vr({_, _} = Res) -> Res;
+get_vr({T, Value, Req}) when T =:= ok; T =:= undefined -> {Value, Req}.
