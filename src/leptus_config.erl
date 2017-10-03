@@ -46,23 +46,23 @@
 %% for test purposes
 %% -----------------------------------------------------------------------------
 -spec start() -> {ok, pid()} | {error, any()}.
-start() ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+start() -> gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
 -spec start_link() -> {ok, pid()} | {error, any()}.
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 -spec stop() -> ok.
-stop() ->
-    gen_server:cast(?MODULE, stop).
+stop() -> gen_server:cast(?MODULE, stop).
 
 %% -----------------------------------------------------------------------------
 %% find a k/v
 %% -----------------------------------------------------------------------------
 -spec lookup(any()) -> any() | undefined.
 lookup(Key) ->
-    lookup(Key, undefined).
+    case ets:lookup(?MODULE, Key) of
+        [] -> undefined;
+        [{_, V}] -> V
+    end.
 
 %% -----------------------------------------------------------------------------
 %% find a k/v and return Default if not found
@@ -70,56 +70,41 @@ lookup(Key) ->
 -spec lookup(any(), Default) -> any() | Default.
 lookup(Key, Default) ->
     case ets:lookup(?MODULE, Key) of
-        [] ->
-            Default;
-        [{_, undefined}] ->
-            Default;
-        [{_, V}] ->
-            V
+        [] -> Default;
+        [{_, undefined}] -> Default;
+        [{_, V}] -> V
     end.
 
 %% -----------------------------------------------------------------------------
 %% set a k/v
 %% -----------------------------------------------------------------------------
 -spec set(any(), any()) -> ok.
-set(Key, Value) ->
-    gen_server:call(?MODULE, {set, {Key, Value}}).
+set(Key, Value) -> gen_server:call(?MODULE, {set, {Key, Value}}).
 
 %% -----------------------------------------------------------------------------
 %% read App/priv/leptus.config file
 %% -----------------------------------------------------------------------------
 config_file(App) ->
-    case file:consult(filename:join(leptus_utils:priv_dir(App),
-                                    "leptus.config")) of
-        {ok, Terms} ->
-            Terms;
-        Else ->
-            Else
+    case file:consult(filename:join(leptus_utils:priv_dir(App), "leptus.config")) of
+        {ok, Terms} -> Terms;
+        Else -> Else
     end.
 
 %% -----------------------------------------------------------------------------
 %% gen_server
 %% -----------------------------------------------------------------------------
-init([]) ->
-    ets:new(?MODULE, [set, named_table, protected]),
-    {ok, ?MODULE}.
+init([]) -> {ok, ets:new(?MODULE, [set, named_table, protected])}.
 
 handle_call({set, Arg}, _From, Tab) ->
     true = ets:insert(Tab, Arg),
     {reply, ok, Tab};
-handle_call(_Msg, _From, Tab) ->
-    {noreply, Tab}.
+handle_call(_Msg, _From, Tab) -> {noreply, Tab}.
 
-handle_cast(stop, Tab) ->
-    {stop, normal, Tab};
-handle_cast(_Msg, Tab) ->
-    {noreply, Tab}.
+handle_cast(stop, Tab) -> {stop, normal, Tab};
+handle_cast(_Msg, Tab) -> {noreply, Tab}.
 
-handle_info(_Msg, Tab) ->
-    {noreply, Tab}.
+handle_info(_Msg, Tab) -> {noreply, Tab}.
 
-terminate(normal, _Tab) ->
-    ok.
+terminate(normal, _Tab) -> ok.
 
-code_change(_OldVsn, Tab, _Extra) ->
-    {ok, Tab}.
+code_change(_OldVsn, Tab, _Extra) -> {ok, Tab}.
