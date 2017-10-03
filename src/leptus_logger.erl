@@ -32,17 +32,14 @@
 
 -spec add_handler(atom() | {atom(), any()}, any()) ->
                          ok | {'EXIT', any()} | any().
-add_handler(Mod, Args) ->
-    gen_event:add_handler(?LOGGER, Mod, Args).
+add_handler(Mod, Args) -> gen_event:add_handler(?LOGGER, Mod, Args).
 
 -spec delete_handler(atom() | {atom(), any()}, any()) ->
                             any() | {error, module_not_found} | {'EXIT', any()}.
-delete_handler(Mod, Args) ->
-    gen_event:delete_handler(?LOGGER, Mod, Args).
+delete_handler(Mod, Args) -> gen_event:delete_handler(?LOGGER, Mod, Args).
 
 -spec send_event(atom(), log_data()) -> ok.
-send_event(Event, LogData) ->
-    gen_event:sync_notify(?LOGGER, {Event, LogData}).
+send_event(Event, LogData) -> gen_event:sync_notify(?LOGGER, {Event, LogData}).
 
 -spec format(string(), log_data()) -> string().
 format(Fmt, LogData) ->
@@ -55,44 +52,32 @@ format(Fmt, LogData) ->
 %% internal
 %% -----------------------------------------------------------------------------
 -spec format(string(), log_data(), iolist()) -> string().
-format([], _, Acc) ->
-    lists:flatten(lists:reverse(Acc));
-format([$~, $h|Fmt], LD=#log_data{ip=IP}, Acc) ->
-    format(Fmt, LD, [inet_parse:ntoa(IP)|Acc]);
-format([$~, $l|Fmt], LD, Acc) ->
-    format(Fmt, LD, [$-|Acc]);
-format([$~, $u|Fmt], LD, Acc) ->
-    format(Fmt, LD, [$-|Acc]);
-format([$~, $t|Fmt], LD=#log_data{request_time=Datetime}, Acc) ->
-    format(Fmt, LD, [[$[, datetime(Datetime), $]]|Acc]);
-format([$~, $r|Fmt], LD=#log_data{method=M, uri=U, version=V}, Acc) ->
-    format(Fmt, LD, [[binary_to_list(M), $ ,
-                      binary_to_list(U), $ ,
-                      atom_to_list(V)]|Acc]);
-format([$~, $s|Fmt], LD=#log_data{status=S}, Acc) ->
-    format(Fmt, LD, [integer_to_list(S)|Acc]);
-format([$~, $b|Fmt], LD=#log_data{content_length=0}, Acc) ->
-    format(Fmt, LD, [$-|Acc]);
-format([$~, $b|Fmt], LD=#log_data{content_length=B}, Acc) ->
-    format(Fmt, LD, [integer_to_list(B)|Acc]);
-format([$~, $B|Fmt], LD=#log_data{content_length=B}, Acc) ->
-    format(Fmt, LD, [integer_to_list(B)|Acc]);
-format([$~, ${|Fmt], LD=#log_data{headers=Headers}, Acc) ->
+format("", _, Acc) -> lists:flatten(lists:reverse(Acc));
+format("~h" ++ Fmt, #log_data{ip = IP} = LD, Acc) -> format(Fmt, LD, [inet_parse:ntoa(IP)|Acc]);
+format("~t" ++ Fmt, #log_data{request_time = Datetime} = LD, Acc) -> format(Fmt, LD, [[$[, datetime(Datetime), $]]|Acc]);
+format("~r" ++ Fmt, #log_data{method = M, uri = U, version = V} = LD, Acc) ->
+    format(Fmt, LD, [[binary_to_list(M), $ , binary_to_list(U), $ , atom_to_list(V)]|Acc]);
+format("~s" ++ Fmt, #log_data{status = S} = LD, Acc) -> format(Fmt, LD, [integer_to_list(S)|Acc]);
+format("~b" ++ Fmt, #log_data{content_length = B} = LD, Acc) ->
+    format(Fmt, LD, [if
+                         B =:= 0 -> $-;
+                         true -> integer_to_list(B)
+                     end|Acc]);
+format("~B" ++ Fmt, #log_data{content_length = B} = LD, Acc) -> format(Fmt, LD, [integer_to_list(B)|Acc]);
+format("~{" ++ Fmt, #log_data{headers = Headers} = LD, Acc) ->
     {Name, Fmt1} = get_name(Fmt, []),
     format(Fmt1, LD, [get_value(Name, Headers)|Acc]);
-format([H|Fmt], LD, Acc) ->
-    format(Fmt, LD, [H|Acc]).
+format([$~, C|Fmt], LD, Acc) when C =:= $l; C =:= $u -> format(Fmt, LD, [$-|Acc]);
+format([H|Fmt], LD, Acc) -> format(Fmt, LD, [H|Acc]).
 
 -spec get_name(string(), string()) -> {binary(), string()}.
-get_name([$}|Fmt], Acc) ->
-    {list_to_binary(lists:reverse(Acc)), Fmt};
-get_name([H|Fmt], Acc) ->
-    get_name(Fmt, [H|Acc]).
+get_name([$}|Fmt], Acc) -> {list_to_binary(lists:reverse(Acc)), Fmt};
+get_name([H|Fmt], Acc) -> get_name(Fmt, [H|Acc]).
 
 -spec get_value(binary(), [{binary(), iodata()}]) -> list().
 get_value(K, Props) ->
     case lists:keyfind(K, 1, Props) of
-        {K, V} -> binary_to_list(V);
+        {_, V} -> binary_to_list(V);
         _ -> "-"
     end.
 
@@ -112,25 +97,16 @@ month(12) -> "Dec".
 
 -spec timezone() -> io_lib:chars().
 timezone() ->
-    {DiffH, DiffM} = timezone(erlang:universaltime(), erlang:localtime()),
-    %% Ugly reformatting code to get times like +0000 and -1300
-    if DiffH < 0 ->
-            io_lib:format("-~2..0w~2..0w", [abs(DiffH), abs(DiffM)]);
-       true ->
-            io_lib:format("+~2..0w~2..0w", [DiffH, DiffM])
-    end.
-
--spec timezone(calendar:datetime(), calendar:datetime()) ->
-                      {integer(), integer()}.
-timezone(UniversalTime, LocalTime) ->
-    DiffSecs = calendar:datetime_to_gregorian_seconds(LocalTime) -
-        calendar:datetime_to_gregorian_seconds(UniversalTime),
-    Mins = (DiffSecs / 60),
-    H = trunc(Mins / 60),
-    M =  trunc(Mins - (H * 60)),
-    {H, M}.
+    LocalTime = erlang:localtime(),
+    LS = calendar:datetime_to_gregorian_seconds(LocalTime),
+    US = calendar:datetime_to_gregorian_seconds(erlang:localtime_to_universaltime(erlang:localtime())),
+    {_, {DiffH, DiffM, _}} = calendar:seconds_to_daystime(abs(LS - US)),
+    io_lib:format("~c~2..0w~2..0w", [if
+                                         LS < US -> $-;
+                                         true -> $+
+                                     end,
+                                     DiffH, DiffM]).
 
 -spec datetime(calendar:datetime()) -> string().
 datetime({{Y, M, D}, {H, Mi, S}}) ->
-    io_lib:format("~w/~s/~w:~2..0w:~2..0w:~2..0w ~s",
-                  [D, month(M), Y, H, Mi, S, timezone()]).
+    io_lib:format("~B/~s/~B:~2..0B:~2..0B:~2..0B ~s", [D, month(M), Y, H, Mi, S, timezone()]).
