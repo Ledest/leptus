@@ -64,12 +64,13 @@
 -callback terminate(Reason::any(), Route::string(), Req::pid(), State::any()) -> ok.
 -callback routes() -> [string()].
 -callback allowed_methods(Route::string()) -> [binary()].
+-callback prefix() -> string().
 -callback get(Route::string(), Req::pid(), State::any()) -> {ok, any(), any()} | {error, any()}.
 -callback put(Route::string(), Req::pid(), State::any()) -> {ok, any(), any()} | {error, any()}.
 -callback post(Route::string(), Req::pid(), State::any()) -> {ok, any(), any()} | {error, any()}.
 -callback delete(Route::string(), Req::pid(), State::any()) -> {ok, any(), any()} | {error, any()}.
 -callback options(Route::string(), Req::pid(), State::any()) -> {ok, any(), any()} | {error, any()}.
--optional_callbacks([get/3, put/3, post/3, delete/3, options/3]).
+-optional_callbacks([prefix/0, get/3, put/3, post/3, delete/3, options/3]).
 
 %% -----------------------------------------------------------------------------
 %% start a listener
