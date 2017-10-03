@@ -81,9 +81,7 @@ start_listener(Listener, App) when is_atom(App)->
     %%   * {handlers, handlers()}
     %%   * {options, options()}
     Conf = leptus_config:config_file(App),
-    Handlers = opt(handlers, Conf, []),
-    Opts = opt(options, Conf, []),
-    start_listener(Listener, Handlers, Opts);
+    start_listener(Listener, opt(handlers, Conf, []), opt(options, Conf, []));
 start_listener(Listener, Handlers) ->
     start_listener(Listener, Handlers, []).
 
@@ -95,49 +93,31 @@ start_listener(Listener, Handlers, Opts) ->
 -spec start_listener(listener(), handlers(), options(), cowboy_protocol:opts()) ->
                             {ok, pid()} | {error, any()}.
 start_listener(Listener, Handlers, Opts, UserCowboyProtoOpts) ->
-    ensure_deps_started(),
-    ensure_started(leptus),
-
+    {ok, _} = application:ensure_all_started(leptus),
     %% add log handlers to the event manager
-    LogHandlers = opt(log_handlers, Opts, []),
-    [ok = leptus_logger:add_handler(M, A) || {M, A} <- LogHandlers],
-
+    lists:foreach(fun({M, A}) -> ok = leptus_logger:add_handler(M, A) end, opt(log_handlers, Opts, [])),
     %% routes
     Paths = leptus_router:paths(Handlers),
     %% serving static files
-    Paths1 = case opt(static_dir, Opts, undefined) of
-                 undefined ->
-                     [];
-                 Path ->
-                     leptus_router:static_file_routes(Path)
-             end,
-    Dispatch = cowboy_router:compile(Paths ++ Paths1),
-    %% sort compiled routes
-    Dispatch1 = leptus_router:sort_dispatch(Dispatch),
-
-    ListenerFunc = get_listener_func(Listener),
-    Ref = get_ref(Listener),
-    NbAcceptors = opt(nb_acceptors, Opts, 100),
-
+    Dispatch = leptus_router:sort_dispatch(cowboy_router:compile(case opt(static_dir, Opts, undefined) of
+                                                                     undefined -> Paths;
+                                                                     Path ->
+                                                                         Paths ++ leptus_router:static_file_routes(Path)
+                                                                 end)),
     %% basic listener configuration
     IP = opt(ip, Opts, {127, 0, 0, 1}),
     Port = opt(port, Opts, 8080),
-
-    ListenerOpts = listener_opts(Listener, IP, Port, Opts),
-    CowboyProtoOpts = [{env, [{dispatch, Dispatch1}]} | UserCowboyProtoOpts],
-
-    Res = cowboy:ListenerFunc(Ref, NbAcceptors, ListenerOpts, CowboyProtoOpts),
-    case Res of
-        {ok, _} ->
-            Opts1 = lists:keydelete(ip, 1, Opts),
-            Opts2 = lists:keydelete(port, 1, Opts1),
-            Opts3 = [{ip, IP}, {port, Port}|Opts2],
-            update_listener_bucket({Listener, {Handlers, Opts3}}),
-            print_info(Listener, IP, Port);
-        _ ->
-            ok
-    end,
-    Res.
+    ListenerFunc = get_listener_func(Listener),
+    case cowboy:ListenerFunc(get_ref(Listener), opt(nb_acceptors, Opts, 100), listener_opts(Listener, IP, Port, Opts),
+                             [{env, [{dispatch, Dispatch}]}|UserCowboyProtoOpts]) of
+        {ok, _} = Res ->
+            update_listener_bucket({Listener,
+                                    {Handlers, lists:foldl(fun({K, _} = O, A) -> lists:keystore(K, 1, A, O) end,
+                                                           Opts, basic_listener_opts(IP, Port))}}),
+            print_info(Listener, IP, Port),
+            Res;
+        Res -> Res
+    end.
 
 %% -----------------------------------------------------------------------------
 %% upgrade running listeners
@@ -148,37 +128,29 @@ upgrade() ->
 
 -spec upgrade([listener()]) -> ok.
 upgrade(Listeners) ->
-    LH = [{L, leptus_utils:listener_handlers(L)} || L <- Listeners],
-    [upgrade(L, H) || {L, H} <- LH],
-    ok.
+    lists:foreach(fun(L) -> upgrade(L, leptus_utils:listener_handlers(L)) end, Listeners).
 
 %% -----------------------------------------------------------------------------
 %% upgrade a listener
 %% -----------------------------------------------------------------------------
 -spec upgrade(listener(), handlers()) -> ok.
 upgrade(Listener, Handlers) ->
-    Opts = case leptus_utils:listener_bucket(Listener) of
-               not_found ->
-                   [];
-               #listener_bucket{options = Opts1} ->
-                   Opts1
-           end,
-    upgrade(Listener, Handlers, Opts).
+    upgrade(Listener, Handlers, case leptus_utils:listener_bucket(Listener) of
+                                    not_found -> [];
+                                    #listener_bucket{options = Opts} -> Opts
+                                end).
 
 -spec upgrade(listener(), handlers(), options()) -> ok.
 upgrade(Listener, Handlers, Opts) ->
     Paths = leptus_router:paths(Handlers),
-    Paths1 = case opt(static_dir, Opts, undefined) of
-                 undefined ->
-                     [];
-                 Path ->
-                     leptus_router:static_file_routes(Path)
-             end,
-    Dispatch = cowboy_router:compile(Paths ++ Paths1),
     %% sort compiled routes
-    Dispatch1 = leptus_router:sort_dispatch(Dispatch),
-    Ref = get_ref(Listener),
-    cowboy:set_env(Ref, dispatch, Dispatch1).
+    cowboy:set_env(get_ref(Listener), dispatch,
+                   leptus_router:sort_dispatch(cowboy_router:compile(case opt(static_dir, Opts, undefined) of
+                                                                         undefined -> Paths;
+                                                                         Path ->
+                                                                             Paths ++
+                                                                                 leptus_router:static_file_routes(Path)
+                                                                     end))).
 
 %% -----------------------------------------------------------------------------
 %% stop a listener
@@ -192,10 +164,7 @@ stop_listener(Listener) ->
 %% -----------------------------------------------------------------------------
 -spec running_listeners() -> [listener()].
 running_listeners() ->
-    F = fun({L, _}, Acc) ->
-                [L|Acc]
-        end,
-    lists:foldr(F, [], leptus_config:lookup(listeners, [])).
+    [L || {L, _} <- leptus_config:lookup(listeners, [])].
 
 %% -----------------------------------------------------------------------------
 %% get uptime of a running listener
@@ -204,12 +173,9 @@ running_listeners() ->
                                      {error, not_found}.
 listener_uptime(Listener) ->
     case leptus_utils:listener_bucket(Listener) of
-        not_found ->
-            {error, not_found};
         #listener_bucket{started_timestamp = Started} ->
-            StartedDatetime = calendar:now_to_local_time(Started),
-            Localtime = calendar:local_time(),
-            calendar:time_difference(StartedDatetime, Localtime)
+            calendar:seconds_to_daystime(erlang:system_time(seconds) - Started);
+        E -> {error, E}
     end.
 
 %% -----------------------------------------------------------------------------
@@ -241,35 +207,14 @@ basic_listener_opts(IP, Port) ->
 
 -spec extra_listener_opts(options()) -> options().
 extra_listener_opts(Opts) ->
-    [
-     {cacertfile, opt(cacertfile, Opts, "")},
-     {certfile, opt(certfile, Opts, "")},
-     {keyfile, opt(keyfile, Opts, "")}
-    ].
-
--spec ensure_started(atom()) -> ok.
-ensure_started(App) ->
-    case application:start(App) of
-        ok ->
-            ok;
-        {error, {already_started, App}} ->
-            ok
-    end.
-
-%% -----------------------------------------------------------------------------
-%% ensure dependencies are started
-%% -----------------------------------------------------------------------------
--spec ensure_deps_started() -> ok.
-ensure_deps_started() ->
-    lists:foreach(fun(A) -> ok = ensure_started(A) end, [crypto, asn1, public_key, ssl, ranch, cowlib, cowboy]).
+    [{K, opt(K, Opts, "")} || K <- [cacertfile, certfile, keyfile]].
 
 -spec opt(atom(), options(), Default) -> any() | Default when Default :: any().
-opt(Key, [{Key, Value}|_], _) ->
-    Value;
-opt(Key, [_|Rest], Default) ->
-    opt(Key, Rest, Default);
-opt(_, [], Default) ->
-    Default.
+opt(Key, Opts, Default) ->
+    case lists:keyfind(Key, Opts) of
+        false -> Default;
+        {_, Value} -> Value
+    end.
 
 %% -----------------------------------------------------------------------------
 %% print the version number and what ip/port it's started on
@@ -277,13 +222,13 @@ opt(_, [], Default) ->
 -spec print_info(listener(), inet:ip_address(), inet:portn_number()) -> ok.
 print_info(Listener, IP, Port) ->
     {ok, Vsn} = application:get_key(leptus, vsn),
-    Listener1 = case Listener of
-                    http -> "http";
-                    https -> "https";
-                    spdy -> "https"
-                end,
-    io:format("Leptus ~s started on ~s://~s:~p~n",
-              [Vsn, Listener1, inet_parse:ntoa(IP), Port]).
+    io:format("Leptus ~s started on ~s://~s:~B~n",
+              [Vsn,
+               if
+                   Listener =:= spdy -> https;
+                   true -> Listener
+               end,
+               inet_parse:ntoa(IP), Port]).
 
 %% -----------------------------------------------------------------------------
 %% update leptus_config ETS table
@@ -292,8 +237,7 @@ print_info(Listener, IP, Port) ->
 -spec update_listener_bucket({listener(), {handlers(), options()}}) -> ok.
 update_listener_bucket({Listener, {Handlers, Opts}}) ->
     %% [{Listener, Bucket}]
-    Bucket = #listener_bucket{handlers = Handlers, options = Opts,
-                              started_timestamp = os:timestamp()},
-    Listeners = leptus_config:lookup(listeners, []),
-    Listeners1 = lists:keystore(Listener, 1, Listeners, {Listener, Bucket}),
-    leptus_config:set(listeners, Listeners1).
+    leptus_config:set(listeners,
+                      lists:keystore(Listener, 1, leptus_config:lookup(listeners, []),
+                                     {Listener, #listener_bucket{handlers = Handlers, options = Opts,
+                                                                 started_timestamp = erlang:system_time(seconds)}})).
