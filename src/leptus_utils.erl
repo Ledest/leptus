@@ -39,26 +39,18 @@
 -spec priv_dir(atom()) -> file:name_all() | {error, bad_name}.
 priv_dir(App) ->
     case code:priv_dir(App) of
-        {error, bad_name} ->
-            case code:which(App) of
-                non_existing ->
-                    {error, bad_name};
-                BeamFile ->
-                    Ebin = filename:dirname(BeamFile),
-                    filename:join(filename:dirname(Ebin), "priv")
-            end;
-        PrivDir ->
-            PrivDir
+        {error, bad_name} = E -> case code:which(App) of
+                                     non_existing -> E;
+                                     BeamFile -> filename:join(filename:dirname(filename:dirname(BeamFile)), "priv")
+                                 end;
+        PrivDir -> PrivDir
     end.
 
 %% -----------------------------------------------------------------------------
 %% generate a paginator
 %% -----------------------------------------------------------------------------
 -spec paginator(non_neg_integer()) -> fun((non_neg_integer(), list()) -> list()).
-paginator(NElemPerPage) ->
-    fun(Page, Objects) ->
-            paginate(NElemPerPage, Objects, Page)
-    end.
+paginator(NElemPerPage) -> fun(Page, Objects) -> paginate(NElemPerPage, Objects, Page) end.
 
 %% -----------------------------------------------------------------------------
 %% paginate a list of objects
@@ -67,63 +59,48 @@ paginator(NElemPerPage) ->
 paginate(NElemPerPage, Objects, Page) ->
     Last = Page * NElemPerPage,
     Start = Last - NElemPerPage,
-    Len = Last - Start,
-    lists:sublist(Objects, Start + 1, Len).
+    lists:sublist(Objects, Start + 1, Last - Start).
 
 %% -----------------------------------------------------------------------------
 %% get a listener bucket
 %% -----------------------------------------------------------------------------
-listener_bucket(Listener) ->
-    Listeners = leptus_config:lookup(listeners, []),
-    get_value(Listener, Listeners, not_found).
+listener_bucket(Listener) -> get_value(Listener, leptus_config:lookup(listeners, []), not_found).
 
 %% -----------------------------------------------------------------------------
 %% get handlers of a running listener
 %% -----------------------------------------------------------------------------
 listener_handlers(Listener) ->
     case listener_bucket(Listener) of
-        not_found ->
-            {error, not_found};
-        #listener_bucket{handlers = Handlers} ->
-            Handlers
+        #listener_bucket{handlers = Handlers} -> Handlers;
+        not_found -> {error, not_found}
     end.
 
 %% -----------------------------------------------------------------------------
 %% print a running listener information
 %% -----------------------------------------------------------------------------
 print_listener_info(Listener) ->
-    Handlers = lists:foldl(fun({_, A}, Acc) -> Acc ++ A end, [],
-                            listener_handlers(Listener)),
-    Modules = [M || {M, _} <- Handlers],
-    F = fun(H) ->
-                Prefix = try H:prefix() of
-                             X -> X
-                         catch _:_ ->
-                                 ""
-                         end,
-                F1 = fun(R) ->
-                             print(H, Prefix, R)
-                     end,
-                lists:foreach(F1, H:routes())
-        end,
-    io:fwrite("~-30s ~-44s ~15s~n", ["Handler", "Route", "Allowed methods"]),
-    io:fwrite("~.98c~n~n", [$=]),
-    lists:foreach(F, Modules).
+    io:fwrite("~-30s ~-44s ~15s~n"
+              "~.98c~n~n",
+              ["Handler", "Route", "Allowed methods",
+               $=]),
+    lists:foreach(fun({M, _}) ->
+                      Prefix = try
+                                   M:prefix()
+                               catch _:_ -> ""
+                               end,
+                      lists:foreach(fun(R) -> print(M, Prefix, R) end, M:routes());
+                     (_) -> ok
+                  end, lists:foldl(fun({_, A}, Acc) -> Acc ++ A end, [], listener_handlers(Listener))).
 
-get_uri_authority(URI) ->
-    get_uri_authority(URI, <<>>).
+get_uri_authority(URI) -> get_uri_authority(URI, <<>>).
 
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
 print(Handler, Prefix, Route) ->
-    Terms = [Handler, Prefix ++ Route, allowed_methods(Handler, Route)],
-    io:fwrite("~-30s ~-44s ~-22s~n", Terms).
+    io:fwrite("~-30s ~-44s ~-22s~n", [Handler, Prefix ++ Route, allowed_methods(Handler, Route)]).
 
-allowed_methods(Handler, Route) ->
-    Methods = Handler:allowed_methods(Route),
-    <<", ", Allow/binary>> = << <<", ", M/binary>> || M <- Methods >>,
-    Allow.
+allowed_methods(Handler, Route) -> list_to_binary(lists:join(<<", ">>, Handler:allowed_methods(Route))).
 
 get_value(Key, Opts, Default) ->
     case lists:keyfind(Key, 1, Opts) of
@@ -131,13 +108,11 @@ get_value(Key, Opts, Default) ->
         _ -> Default
     end.
 
-get_uri_authority(<<>>, Acc) ->
-    Acc;
+get_uri_authority(<<>>, Acc) -> Acc;
 get_uri_authority(<<$/, _/binary>>, Acc) ->
     %% skip the rest
     Acc;
 get_uri_authority(<<"://", Rest/binary>>, _) ->
     %% skip scheme
     get_uri_authority(Rest, <<>>);
-get_uri_authority(<<Char:1/binary, Rest/binary>>, Acc) ->
-    get_uri_authority(Rest, <<Acc/binary, Char/binary>>).
+get_uri_authority(<<Char:1/binary, Rest/binary>>, Acc) -> get_uri_authority(Rest, <<Acc/binary, Char/binary>>).
