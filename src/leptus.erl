@@ -212,7 +212,7 @@ extra_listener_opts(Opts) ->
 
 -spec opt(atom(), options(), Default) -> any() | Default when Default :: any().
 opt(Key, Opts, Default) ->
-    case lists:keyfind(Key, Opts) of
+    case lists:keyfind(Key, 1, Opts) of
         false -> Default;
         {_, Value} -> Value
     end.
