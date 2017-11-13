@@ -24,14 +24,9 @@ PROJECT = leptus
 CT_SUITES = leptus_pt leptus_router leptus_handler leptus_logger leptus_http \
 	leptus_config leptus_utils
 
-dep_cowboy = https://github.com/extend/cowboy/archive/0.9.0.tar.gz
-dep_msgpack = https://github.com/msgpack/msgpack-erlang/archive/0.2.8.tar.gz
-ifdef USE_JSX
-    dep_jsx = https://github.com/talentdeficit/jsx/archive/v1.4.5.tar.gz
-    ERLC_OPTS += -DUSE_JSX
-else
-    dep_jiffy = https://github.com/davisp/jiffy/archive/0.8.5.tar.gz
-endif
+dep_cowboy = https://github.com/ninenines/cowboy/archive/1.0.4.tar.gz
+dep_msgpack = https://github.com/msgpack/msgpack-erlang/archive/0.7.0.tar.gz
+dep_jsx = https://github.com/talentdeficit/jsx/archive/v2.8.2.tar.gz
 
 DEPS_DIR ?= $(CURDIR)/deps
 export DEPS_DIR
