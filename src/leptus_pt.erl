@@ -49,7 +49,7 @@ walk_ast([{function, _, M, 3, _} = Form|Rest], Acc, Routes) when M =:= get; M =:
 %% -----------------------------------------------------------------------------
 walk_ast([{eof, L} = Form|Rest], Acc, Routes) ->
     %% [{string(), [binary()]}]
-    RoutesNMethods = lists:usort(lists:foldl(fun({Route, Method}, AccIn) ->
+    RoutesNMethods = lists:usort(lists:foldr(fun({Route, Method}, AccIn) ->
                                                  case lists:keyfind(Route, 1, AccIn) of
                                                      {_, Methods} ->
                                                          lists:keystore(Route, 1, AccIn, {Route, [Method|Methods]});
