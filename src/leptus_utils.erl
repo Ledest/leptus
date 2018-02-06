@@ -30,6 +30,7 @@
 -export([listener_handlers/1]).
 -export([print_listener_info/1]).
 -export([get_uri_authority/1]).
+-export([join/2]).
 
 -include("leptus_stats.hrl").
 
@@ -93,6 +94,9 @@ print_listener_info(Listener) ->
                   end, lists:foldl(fun({_, A}, Acc) -> Acc ++ A end, [], listener_handlers(Listener))).
 
 get_uri_authority(URI) -> get_uri_authority(URI, <<>>).
+
+join(S, [_|_] = L) -> tl(lists:foldr(fun(I, A) -> [S, I|A] end, [], L));
+join(_, T) -> T.
 
 %% -----------------------------------------------------------------------------
 %% internal
