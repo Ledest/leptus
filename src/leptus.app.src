@@ -20,7 +20,7 @@
 %% THE SOFTWARE.
 
 {application, leptus, [{description, "REST framework that runs on top of cowboy"},
-                       {vsn, "1.1.0"},
+                       {vsn, "1.1.1"},
                        {registered, []},
                        {applications, [kernel, stdlib, cowboy]},
                        {mod, {leptus_app, []}},

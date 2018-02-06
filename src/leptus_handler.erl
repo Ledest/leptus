@@ -395,7 +395,7 @@ status(http_version_not_supported) -> 505;
 status(A) -> A.
 
 -spec join_http_methods([binary()]) -> binary().
-join_http_methods(Methods) -> list_to_binary(lists:join(<<", ">>, Methods)).
+join_http_methods(Methods) -> list_to_binary(leptus_utils:join(<<", ">>, Methods)).
 
 -spec compile_host(string() | binary()) -> [[binary() | atom()]] | [atom()].
 compile_host(HostMatch) -> [X || {X, _, _} <- cowboy_router:compile([{HostMatch, []}])].

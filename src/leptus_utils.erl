@@ -104,7 +104,7 @@ join(_, T) -> T.
 print(Handler, Prefix, Route) ->
     io:fwrite("~-30s ~-44s ~-22s~n", [Handler, Prefix ++ Route, allowed_methods(Handler, Route)]).
 
-allowed_methods(Handler, Route) -> list_to_binary(lists:join(<<", ">>, Handler:allowed_methods(Route))).
+allowed_methods(Handler, Route) -> list_to_binary(join(<<", ">>, Handler:allowed_methods(Route))).
 
 get_value(Key, Opts, Default) ->
     case lists:keyfind(Key, 1, Opts) of
