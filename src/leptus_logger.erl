@@ -30,12 +30,10 @@
 -export([send_event/2]).
 -export([format/2]).
 
--spec add_handler(atom() | {atom(), any()}, any()) ->
-                         ok | {'EXIT', any()} | any().
+-spec add_handler(atom() | {atom(), any()}, any()) -> ok | {'EXIT', any()} | any().
 add_handler(Mod, Args) -> gen_event:add_handler(?LOGGER, Mod, Args).
 
--spec delete_handler(atom() | {atom(), any()}, any()) ->
-                            any() | {error, module_not_found} | {'EXIT', any()}.
+-spec delete_handler(atom() | {atom(), any()}, any()) -> any() | {error, module_not_found} | {'EXIT', any()}.
 delete_handler(Mod, Args) -> gen_event:delete_handler(?LOGGER, Mod, Args).
 
 -spec send_event(atom(), log_data()) -> ok.
@@ -58,16 +56,13 @@ format("~t" ++ Fmt, #log_data{request_time = Datetime} = LD, Acc) -> format(Fmt,
 format("~r" ++ Fmt, #log_data{method = M, uri = U, version = V} = LD, Acc) ->
     format(Fmt, LD, [[binary_to_list(M), $ , binary_to_list(U), $ , atom_to_list(V)]|Acc]);
 format("~s" ++ Fmt, #log_data{status = S} = LD, Acc) -> format(Fmt, LD, [integer_to_list(S)|Acc]);
-format("~b" ++ Fmt, #log_data{content_length = B} = LD, Acc) ->
-    format(Fmt, LD, [if
-                         B =:= 0 -> $-;
-                         true -> integer_to_list(B)
-                     end|Acc]);
-format("~B" ++ Fmt, #log_data{content_length = B} = LD, Acc) -> format(Fmt, LD, [integer_to_list(B)|Acc]);
 format("~{" ++ Fmt, #log_data{headers = Headers} = LD, Acc) ->
     {Name, Fmt1} = get_name(Fmt, []),
     format(Fmt1, LD, [get_value(Name, Headers)|Acc]);
+format("~b" ++ Fmt, #log_data{content_length = 0} = LD, Acc) -> format(Fmt, LD, [$-|Acc]);
 format([$~, C|Fmt], LD, Acc) when C =:= $l; C =:= $u -> format(Fmt, LD, [$-|Acc]);
+format([$~, C|Fmt], #log_data{content_length = B} = LD, Acc) when C =:= $b; C =:= $B ->
+    format(Fmt, LD, [integer_to_list(B)|Acc]);
 format([H|Fmt], LD, Acc) -> format(Fmt, LD, [H|Acc]).
 
 -spec get_name(string(), string()) -> {binary(), string()}.
@@ -82,18 +77,8 @@ get_value(K, Props) ->
     end.
 
 -spec month(1..12) -> string().
-month(1) -> "Jan";
-month(2) -> "Feb";
-month(3) -> "Mar";
-month(4) -> "Apr";
-month(5) -> "May";
-month(6) -> "Jun";
-month(7) -> "Jul";
-month(8) -> "Aug";
-month(9) -> "Sep";
-month(10) -> "Oct";
-month(11) -> "Nov";
-month(12) -> "Dec".
+month(I) when is_integer(I), I >= 1, I =< 12 ->
+    element(I, {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}).
 
 -spec timezone() -> io_lib:chars().
 timezone() ->
