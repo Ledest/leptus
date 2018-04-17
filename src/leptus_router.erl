@@ -81,8 +81,9 @@ handle_routes([{HostMatch, X}|T], Acc) ->
     handle_routes(T, Acc ++ [{HostMatch,
                               lists:foldr(fun({Handler, State}, AccIn) ->
                                                Prefix = handler_prefix(Handler),
-                                               lists:foldr(fun(Route) -> new_route(Prefix, Route, Handler, State) end,
-                                                           AccIn, Handler:routes())
+                                               lists:foldr(fun(Route, A) ->
+                                                               [new_route(Prefix, Route, Handler, State)|A]
+                                                           end, AccIn, Handler:routes())
                                           end, [], X)}]).
 
 new_route(Prefix, Route, Handler, HandlerState) ->
