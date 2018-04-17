@@ -37,12 +37,6 @@ start_link() ->
 %% -----------------------------------------------------------------------------
 init([]) ->
     {ok, {{one_for_one, 50, 10},
-          [
-           {leptus_config, {leptus_config, start_link, []},
-            permanent, 5000, worker, [leptus_config]},
-           {leptus_req_sup, {leptus_req_sup, start_link, []},
-            permanent, 5000, supervisor, [leptus_req_sup]},
-           {leptus_logger, {gen_event, start_link, [{local, ?LOGGER}]},
-            permanent, 5000, worker, []}
-          ]
-         }}.
+          [{leptus_config, {leptus_config, start_link, []}, permanent, 5000, worker, [leptus_config]},
+           {leptus_req_sup, {leptus_req_sup, start_link, []}, permanent, 5000, supervisor, [leptus_req_sup]},
+           {leptus_logger, {gen_event, start_link, [{local, ?LOGGER}]}, permanent, 5000, worker, []}]}}.
