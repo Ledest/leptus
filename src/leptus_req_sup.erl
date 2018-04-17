@@ -28,17 +28,13 @@
 %% -----------------------------------------------------------------------------
 %% API
 %% -----------------------------------------------------------------------------
-start_link() ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+start_link() -> supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_child(Req) ->
-    supervisor:start_child(leptus_req_sup, [Req]).
+start_child(Req) -> supervisor:start_child(leptus_req_sup, [Req]).
 
 %% -----------------------------------------------------------------------------
 %% supervisor callback
 %% -----------------------------------------------------------------------------
 init([]) ->
     {ok, {{simple_one_for_one, 10, 20},
-          [{leptus_req, {leptus_req, start_link, []},
-            transient, 5000, worker, [leptus_req]}]
-         }}.
+          [{leptus_req, {leptus_req, start_link, []}, transient, 5000, worker, [leptus_req]}]}}.
