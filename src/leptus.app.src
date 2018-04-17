@@ -1,5 +1,6 @@
 %%-*- mode: erlang -*-
 %% Copyright (c) 2013-2015 Sina Samavati <sina.samv@gmail.com>
+%%               2016-2018 Led <ledest@gmail.com>
 %%
 %% Permission is hereby granted, free of charge, to any person obtaining a copy
 %% of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +22,7 @@
 
 {application, leptus, [{description, "REST framework that runs on top of cowboy"},
                        {vsn, "1.1.2"},
-                       {registered, []},
+                       {registered, [leptus_config, leptus_log_man, leptus_req_sup, leptus_sup]},
                        {applications, [kernel, stdlib, cowboy]},
                        {mod, {leptus_app, []}},
                        {env, []},
