@@ -164,11 +164,10 @@ init(Req) -> {ok, Req}.
 handle_call(stop, _From, Req) -> {stop, shutdown, ok, Req};
 handle_call(get_req, _From, Req) -> {reply, Req, Req};
 handle_call({F, A}, _From, Req) ->
-    {Value, Req1} = case call_cowboy_req(F, A, Req) of
-                        {error, _} = E -> {E, Req};
-                        E -> E
-                    end,
-    {reply, Value, Req1}.
+    case call_cowboy_req(F, A, Req) of
+        {error, _} = E -> {reply, E, Req};
+        {Value, Req1} -> {reply, Value, Req1}
+    end.
 
 handle_cast({set_req, NewReq}, _Req) -> {noreply, NewReq};
 handle_cast(_Msg, Req) -> {noreply, Req}.
