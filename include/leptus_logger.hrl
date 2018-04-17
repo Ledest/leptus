@@ -20,17 +20,14 @@
 
 -define(LOGGER, leptus_log_man).
 
--record(log_data,
-        {
-          request_time = erlang:localtime() :: calendar:datetime(),
-          response_time :: undefined | calendar:datetime(),
-          request_line = "" :: string(),
-          ip :: inet:ip_address(),
-          version = 'HTTP/1.1' :: atom(),
-          method = <<"GET">> :: binary(),
-          uri = <<"/">> :: binary(),
-          headers = [] :: [{binary(), iodata()}],
-          status = 200 :: non_neg_integer(),
-          content_length = 0 :: non_neg_integer()
-        }).
+-record(log_data, {request_time = erlang:localtime() :: calendar:datetime(),
+                   response_time :: undefined | calendar:datetime(),
+                   request_line = "" :: string(),
+                   ip :: inet:ip_address(),
+                   version = 'HTTP/1.1' :: atom(),
+                   method = <<"GET">> :: binary(),
+                   uri = <<"/">> :: binary(),
+                   headers = [] :: [{binary(), iodata()}],
+                   status = 200 :: non_neg_integer(),
+                   content_length = 0 :: non_neg_integer()}).
 -type log_data() :: #log_data{}.
