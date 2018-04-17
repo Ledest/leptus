@@ -28,8 +28,6 @@
 %% Application callbacks
 %% ===================================================================
 
-start(_StartType, _StartArgs) ->
-    leptus_sup:start_link().
+start(_StartType, _StartArgs) -> leptus_sup:start_link().
 
-stop(_State) ->
-    ok.
+stop(_State) -> ok.
