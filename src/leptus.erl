@@ -46,21 +46,20 @@
 -export_type([handlers/0]).
 
 -type listener() :: http | https | spdy.
--type static_directory() :: Dir :: file:name()
-                          | {priv_dir, App :: atom(), Dir :: file:name()}.
--type option() :: {nb_acceptors, non_neg_integer()}
-                | {ip, inet:ip_address()}
-                | {port, inet:port_number()}
-                | {cacertfile, file:name_all()}
-                | {certfile, file:name_all()}
-                | {keyfile, file:name_all()}
-                | {static_dir, {host_match(), static_directory()}}
-                | {log_handlers, [{module(), any()}]}.
+-type static_directory() :: Dir :: file:name() | {priv_dir, App :: atom(), Dir :: file:name()}.
+-type option() :: {nb_acceptors, non_neg_integer()} |
+                  {ip, inet:ip_address()} |
+                  {port, inet:port_number()} |
+                  {cacertfile, file:name_all()} |
+                  {certfile, file:name_all()} |
+                  {keyfile, file:name_all()} |
+                  {static_dir, {host_match(), static_directory()}} |
+                  {log_handlers, [{module(), any()}]}.
 -type options() :: [option()].
 -export_type([listener/0]).
 -export_type([options/0]).
 
--callback init(Route::string(), Req::pid(), State::any()) -> {ok, any()} | {error, any()}.
+-callback init(Route::string(), Req::pid(), State::any()) -> {ok | error, any()}.
 -callback terminate(Reason::any(), Route::string(), Req::pid(), State::any()) -> ok.
 -callback routes() -> [string()].
 -callback allowed_methods(Route::string()) -> [binary()].
@@ -75,24 +74,19 @@
 %% -----------------------------------------------------------------------------
 %% start a listener
 %% -----------------------------------------------------------------------------
--spec start_listener(listener(), atom() | handlers()) ->
-                            {ok, pid()} | {error, any()}.
+-spec start_listener(listener(), atom() | handlers()) -> {ok, pid()} | {error, any()}.
 start_listener(Listener, App) when is_atom(App)->
     %% App/priv/leptus.config should have two sections:
     %%   * {handlers, handlers()}
     %%   * {options, options()}
     Conf = leptus_config:config_file(App),
     start_listener(Listener, opt(handlers, Conf, []), opt(options, Conf, []));
-start_listener(Listener, Handlers) ->
-    start_listener(Listener, Handlers, []).
+start_listener(Listener, Handlers) -> start_listener(Listener, Handlers, []).
 
--spec start_listener(listener(), handlers(), options()) ->
-                            {ok, pid()} | {error, any()}.
-start_listener(Listener, Handlers, Opts) ->
-    start_listener(Listener, Handlers, Opts, []).
+-spec start_listener(listener(), handlers(), options()) -> {ok, pid()} | {error, any()}.
+start_listener(Listener, Handlers, Opts) -> start_listener(Listener, Handlers, Opts, []).
 
--spec start_listener(listener(), handlers(), options(), cowboy_protocol:opts()) ->
-                            {ok, pid()} | {error, any()}.
+-spec start_listener(listener(), handlers(), options(), cowboy_protocol:opts()) -> {ok, pid()} | {error, any()}.
 start_listener(Listener, Handlers, Opts, UserCowboyProtoOpts) ->
     {ok, _} = application:ensure_all_started(leptus),
     %% add log handlers to the event manager
@@ -124,12 +118,10 @@ start_listener(Listener, Handlers, Opts, UserCowboyProtoOpts) ->
 %% upgrade running listeners
 %% -----------------------------------------------------------------------------
 -spec upgrade() -> ok.
-upgrade() ->
-    upgrade(running_listeners()).
+upgrade() -> upgrade(running_listeners()).
 
 -spec upgrade([listener()]) -> ok.
-upgrade(Listeners) ->
-    lists:foreach(fun(L) -> upgrade(L, leptus_utils:listener_handlers(L)) end, Listeners).
+upgrade(Listeners) -> lists:foreach(fun(L) -> upgrade(L, leptus_utils:listener_handlers(L)) end, Listeners).
 
 %% -----------------------------------------------------------------------------
 %% upgrade a listener
@@ -157,15 +149,13 @@ upgrade(Listener, Handlers, Opts) ->
 %% stop a listener
 %% -----------------------------------------------------------------------------
 -spec stop_listener(listener()) -> ok | {error, not_found}.
-stop_listener(Listener) ->
-    cowboy:stop_listener(get_ref(Listener)).
+stop_listener(Listener) -> cowboy:stop_listener(get_ref(Listener)).
 
 %% -----------------------------------------------------------------------------
 %% get a list of running listeners
 %% -----------------------------------------------------------------------------
 -spec running_listeners() -> [listener()].
-running_listeners() ->
-    [L || {L, _} <- leptus_config:lookup(listeners, [])].
+running_listeners() -> [L || {L, _} <- leptus_config:lookup(listeners, [])].
 
 %% -----------------------------------------------------------------------------
 %% get uptime of a running listener
@@ -195,20 +185,15 @@ get_ref(spdy) -> leptus_spdy.
 %% -----------------------------------------------------------------------------
 %% listener options
 %% -----------------------------------------------------------------------------
--spec listener_opts(listener(), inet:ip_address(), inet:port_number(),
-                    options()) -> options().
-listener_opts(http, IP, Port, _) ->
-    basic_listener_opts(IP, Port);
-listener_opts(_, IP, Port, Opts) ->
-    basic_listener_opts(IP, Port) ++ extra_listener_opts(Opts).
+-spec listener_opts(listener(), inet:ip_address(), inet:port_number(), options()) -> options().
+listener_opts(http, IP, Port, _) -> basic_listener_opts(IP, Port);
+listener_opts(_, IP, Port, Opts) -> basic_listener_opts(IP, Port) ++ extra_listener_opts(Opts).
 
 -spec basic_listener_opts(inet:ip_address(), inet:port_number()) -> options().
-basic_listener_opts(IP, Port) ->
-    [{ip, IP}, {port, Port}].
+basic_listener_opts(IP, Port) -> [{ip, IP}, {port, Port}].
 
 -spec extra_listener_opts(options()) -> options().
-extra_listener_opts(Opts) ->
-    [{K, opt(K, Opts, "")} || K <- [cacertfile, certfile, keyfile]].
+extra_listener_opts(Opts) -> [{K, opt(K, Opts, "")} || K <- [cacertfile, certfile, keyfile]].
 
 -spec opt(atom(), options(), Default) -> any() | Default when Default :: any().
 opt(Key, Opts, Default) ->
@@ -221,15 +206,10 @@ opt(Key, Opts, Default) ->
 %% print the version number and what ip/port it's started on
 %% -----------------------------------------------------------------------------
 -spec print_info(listener(), inet:ip_address(), inet:portn_number()) -> ok.
+print_info(spdy, IP, Port) -> print_info(https, IP, Port);
 print_info(Listener, IP, Port) ->
     {ok, Vsn} = application:get_key(leptus, vsn),
-    io:format("Leptus ~s started on ~s://~s:~B~n",
-              [Vsn,
-               if
-                   Listener =:= spdy -> https;
-                   true -> Listener
-               end,
-               inet_parse:ntoa(IP), Port]).
+    io:format("Leptus ~s started on ~s://~s:~B~n", [Vsn, Listener, inet_parse:ntoa(IP), Port]).
 
 %% -----------------------------------------------------------------------------
 %% update leptus_config ETS table
