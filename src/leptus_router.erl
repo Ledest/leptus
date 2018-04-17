@@ -45,7 +45,7 @@ paths(Handlers) -> handle_routes(Handlers, []).
 %% -----------------------------------------------------------------------------
 %% order routes the way it matters in cowboy
 %% -----------------------------------------------------------------------------
--spec sort_dispatch(Dispatch) -> Dispatch when Dispatch :: dispatch().
+-spec sort_dispatch(Dispatch::dispatch()) -> dispatch().
 sort_dispatch(Dispatch) ->
     %% merge duplicate HostMatches
     sort_dispatch(lists:foldr(fun({HostMatch, _, Paths} = E, Acc) ->
@@ -78,12 +78,12 @@ static_file_routes({HostMatch, Dir}) ->
 handle_routes([], Acc) -> Acc;
 handle_routes([{HostMatch, X}|T], Acc) ->
     %% each module must have routes/0 -> [string()].
-    handle_routes(T,
-                  Acc ++ [{HostMatch,
-                           lists:foldl(fun({Handler, State}, AccIn) ->
-                                           AccIn ++ [new_route(handler_prefix(Handler),
-                                                               Route, Handler, State) || Route <- Handler:routes()]
-                                       end, [], X)}]).
+    handle_routes(T, Acc ++ [{HostMatch,
+                              lists:foldr(fun({Handler, State}, AccIn) ->
+                                               Prefix = handler_prefix(Handler),
+                                               lists:foldr(fun(Route) -> new_route(Prefix, Route, Handler, State) end,
+                                                           AccIn, Handler:routes())
+                                          end, [], X)}]).
 
 new_route(Prefix, Route, Handler, HandlerState) ->
     {Prefix ++ Route, leptus_handler, #resrc{route = Route, handler = Handler, handler_state = HandlerState}}.
@@ -123,21 +123,15 @@ segment_val(_) -> 0.5.
 -spec lt(path_rule(), integer()) -> boolean().
 lt(_, -1) -> true;
 lt(PathRule, Y) ->
-    case segments_length(PathRule) of
-        -1 -> false;
-        N when N < Y -> true;
-        _ -> false
-    end.
+    N = segments_length(PathRule),
+    N =/= -1 andalso N < Y.
 
 %% equal greater than
 -spec egt(path_rule(), integer()) -> boolean().
 egt(_, -1) -> false;
 egt(PathRule, Y) ->
-    case segments_length(PathRule) of
-        -1 -> true;
-        N when N >= Y -> true;
-        _ -> false
-    end.
+    N = segments_length(PathRule),
+    N =:= -1 orelse N >= Y.
 
 %% -----------------------------------------------------------------------------
 %% collect static file names
@@ -154,11 +148,8 @@ static_files(Dir) ->
 %% check if a file is an index file
 %% -----------------------------------------------------------------------------
 is_index_file(File) ->
-    case filename:basename(File) of
-        "index.html" -> true;
-        "index.htm" -> true;
-        _ -> false
-    end.
+    N = filename:basename(File),
+    N =:= "index.html" orelse N =:= "index.htm".
 
 %% -----------------------------------------------------------------------------
 %% prepare index url
