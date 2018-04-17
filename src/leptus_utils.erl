@@ -82,16 +82,16 @@ listener_handlers(Listener) ->
 print_listener_info(Listener) ->
     io:fwrite("~-30s ~-44s ~15s~n"
               "~.98c~n~n",
-              ["Handler", "Route", "Allowed methods",
-               $=]),
+              ["Handler", "Route", "Allowed methods", $=]),
     lists:foreach(fun({M, _}) ->
                       Prefix = try
                                    M:prefix()
-                               catch _:_ -> ""
+                               catch
+                                   _:_ -> ""
                                end,
                       lists:foreach(fun(R) -> print(M, Prefix, R) end, M:routes());
                      (_) -> ok
-                  end, lists:foldl(fun({_, A}, Acc) -> Acc ++ A end, [], listener_handlers(Listener))).
+                  end, lists:foldr(fun({_, A}, Acc) -> A ++ Acc end, [], listener_handlers(Listener))).
 
 get_uri_authority(URI) -> get_uri_authority(URI, <<>>).
 
