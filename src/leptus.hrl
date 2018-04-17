@@ -22,10 +22,7 @@
 -type handler() :: module().
 -type handler_state() :: any().
 
--record(resrc,
-        {
-          handler :: handler(),
-          route = "" :: route(),
-          handler_state :: handler_state()
-        }).
+-record(resrc, {handler :: handler(),
+                route = "" :: route(),
+                handler_state :: handler_state()}).
 -type resrc() :: #resrc{}.
