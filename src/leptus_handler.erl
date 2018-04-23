@@ -70,7 +70,7 @@ upgrade(Req, Env, _Handler, #state{resrc = #resrc{handler = Handler, route = Rou
     {ok, #state{terminate_reason = TerminateReason, resrc = #resrc{handler_state = HState2}}} =
         try Handler:init(Route, Req, HState) of
             {ok, HState1} ->
-                handle_request(http_method(Resrc#state.method), Req,
+                handle_request(http_method(State#state.method), Req,
                                State#state{resrc = Resrc#resrc{handler_state = HState1}});
             Else ->
                 reply(500, [], <<>>, Req),
