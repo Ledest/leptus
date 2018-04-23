@@ -65,8 +65,8 @@ init(_, Req, Resrc) ->
      #state{resrc = Resrc, method = Method,
             log_data = #log_data{method = Method, headers = cowboy_req:get(headers, Req)}}}.
 
-upgrade(Req, Env, _Handler, #state{resrc = #resrc{handler = Handler, route = Route, handler_state = HState} = Resrc,
-                                   log_data = LogData} = State) ->
+upgrade(Req, Env, _Handler,
+        #state{resrc = #resrc{handler = Handler, route = Route, handler_state = HState} = Resrc} = State) ->
     {ok, #state{terminate_reason = TerminateReason, resrc = #resrc{handler_state = HState2}}} =
         try Handler:init(Route, Req, HState) of
             {ok, HState1} ->
@@ -85,7 +85,7 @@ upgrade(Req, Env, _Handler, #state{resrc = #resrc{handler = Handler, route = Rou
     receive
         {Status, ContentLength} ->
             {IP, _} = leptus_req:peer(Req),
-            LogData = (Resrc#state.log_data)#log_data{ip = IP, version = leptus_req:version(Req),
+            LogData = (State#state.log_data)#log_data{ip = IP, version = leptus_req:version(Req),
                                                       uri = leptus_req:uri(Req), status = Status,
                                                       content_length = ContentLength, response_time = LocalTime},
             lists:foreach(fun(T) -> spawn(leptus_logger, send_event, [T, LogData]) end, [access_log, debug_log])
