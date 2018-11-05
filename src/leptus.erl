@@ -149,7 +149,9 @@ upgrade(Listener, Handlers, Opts) ->
 %% stop a listener
 %% -----------------------------------------------------------------------------
 -spec stop_listener(listener()) -> ok | {error, not_found}.
-stop_listener(Listener) -> cowboy:stop_listener(get_ref(Listener)).
+stop_listener(Listener) ->
+    leptus_config:set(listeners, lists:keydelete(Listener, 1, leptus_config:lookup(listeners, []))),
+    cowboy:stop_listener(get_ref(Listener)).
 
 %% -----------------------------------------------------------------------------
 %% get a list of running listeners
