@@ -104,21 +104,7 @@ method(Pid) -> invoke(Pid, method, []).
 body(Pid) ->
     Body = body_raw(Pid),
     case parse_header(Pid, <<"content-type">>) of
-        {<<"application">>, <<"x-www-form-urlencoded">>, _} -> cow_qs:parse_qs(Body);
-        {<<"application">>, <<"json">>, _} -> try
-                                                  jsx:decode(Body)
-                                              catch
-                                                  _:_ -> Body
-                                              end;
-        {<<"application">>, <<"msgpack">>, _} -> case msgpack:unpack(Body) of
-                                                     {ok, UnpackedBody} -> UnpackedBody;
-                                                     _ -> Body
-                                                 end;
-        {<<"application">>, Type, _} when Type =:= <<"erlang">>; Type =:= <<"etf">> -> try
-                                                                                           binary_to_term(Body, [safe])
-                                                                                       catch
-                                                                                           _:_ -> Body
-                                                                                       end;
+        {<<"application">>, Type, _} -> body_decode(Type, Body);
         _ -> Body
     end.
 
@@ -197,3 +183,24 @@ call_cowboy_req(F, A) -> get_vr(apply(cowboy_req, F, A)).
                     {any(), cowboy_req:req()}.
 get_vr({_, _} = Res) -> Res;
 get_vr({T, Value, Req}) when T =:= ok; T =:= undefined -> {Value, Req}.
+
+-spec body_decode(Type::binary(), Body::binary()) -> binary().
+body_decode(<<"x-www-form-urlencoded">>, Body) -> cow_qs:parse_qs(Body);
+body_decode(<<"json">>, Body) ->
+    try
+        jsx:decode(Body)
+    catch
+        _:_ -> Body
+    end;
+body_decode(<<"msgpack">>, Body) ->
+    case msgpack:unpack(Body) of
+        {ok, UnpackedBody} -> UnpackedBody;
+        _ -> Body
+    end;
+body_decode(Type, Body) when Type =:= <<"erlang">>; Type =:= <<"etf">> ->
+    try
+        binary_to_term(Body, [safe])
+    catch
+        _:_ -> Body
+    end;
+body_decode(_Type, Body) -> Body.
