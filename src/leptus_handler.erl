@@ -313,7 +313,8 @@ reply(Status, Headers, Body, Req) ->
     leptus_req:reply(Req, Status, Headers, Body).
 
 -spec prepare_headers_body(headers(), body()) -> {headers(), body()}.
-prepare_headers_body(Headers, {erlang, Body}) -> {maybe_set_content_type(erlang, Headers), term_to_binary(Body)};
+prepare_headers_body(Headers, {Type, Body}) when Type =:= erlang; Type =:= etf ->
+    {maybe_set_content_type(Type, Headers), term_to_binary(Body)};
 prepare_headers_body(Headers, {json, Body}) -> {maybe_set_content_type(json, Headers), jsx:encode(Body)};
 prepare_headers_body(Headers, {msgpack, Body}) ->
     {maybe_set_content_type(msgpack, Headers), msgpack:pack(Body, [{map_format, jsx}])};
@@ -334,6 +335,7 @@ maybe_set_content_type(Type, Headers) ->
 content_type(text) -> <<"text/plain">>;
 content_type(html) -> <<"text/html">>;
 content_type(erlang) -> <<"application/erlang">>;
+content_type(etf) -> <<"application/etf">>;
 content_type(json) -> <<"application/json">>;
 content_type(msgpack) -> <<"application/msgpack">>.
 

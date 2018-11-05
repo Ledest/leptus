@@ -104,11 +104,7 @@ method(Pid) -> invoke(Pid, method, []).
 body(Pid) ->
     Body = body_raw(Pid),
     case parse_header(Pid, <<"content-type">>) of
-        {<<"application">>, <<"erlang">>, _} -> try
-                                                    binary_to_term(Body, [safe])
-                                                catch
-                                                    _:_ -> Body
-                                                end;
+        {<<"application">>, <<"x-www-form-urlencoded">>, _} -> cow_qs:parse_qs(Body);
         {<<"application">>, <<"json">>, _} -> try
                                                   jsx:decode(Body)
                                               catch
@@ -118,7 +114,11 @@ body(Pid) ->
                                                      {ok, UnpackedBody} -> UnpackedBody;
                                                      _ -> Body
                                                  end;
-        {<<"application">>, <<"x-www-form-urlencoded">>, _} -> cow_qs:parse_qs(Body);
+        {<<"application">>, Type, _} when Type =:= <<"erlang">>; Type =:= <<"etf">> -> try
+                                                                                           binary_to_term(Body, [safe])
+                                                                                       catch
+                                                                                           _:_ -> Body
+                                                                                       end;
         _ -> Body
     end.
 
