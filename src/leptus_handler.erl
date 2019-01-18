@@ -77,8 +77,9 @@ upgrade(Req, Env, _Handler,
                 badmatch_error_info(Else, {Handler, init, 3}, Route, Req, State),
                 {ok, State#state{terminate_reason = {error, badmatch}}}
         catch Class:Reason ->
+            Stacktrace = erlang:get_stacktrace(),
             reply(500, [], <<>>, Req),
-            error_info(Class, Reason, Route, Req, HState),
+            error_info(Class, {Reason, Stacktrace}, Route, Req, HState),
             {ok, State#state{terminate_reason = {error, Reason}}}
         end,
     LocalTime = erlang:localtime(),
@@ -129,7 +130,7 @@ handle_request(Func, Req, #state{resrc = #resrc{handler = Handler, route = Route
                         try Handler:Func(Route, Req, HandlerState1) of
                             Response -> handle_response(Response, Req, State#state{terminate_reason = normal})
                         catch Class:Reason ->
-                            error_info(Class, Reason, Route, Req, HandlerState1),
+                            error_info(Class, {Reason, erlang:get_stacktrace()}, Route, Req, HandlerState1),
                             handle_response({500, <<>>, HandlerState1}, Req,
                                             State#state{terminate_reason = {error, Reason}})
                         end;
@@ -172,7 +173,7 @@ authorization(Handler, Route, Req, HandlerState) ->
                              badmatch_error_info(Else, {Handler, is_authenticated, 3}, Route, Req, HandlerState),
                              {false, {500, <<>>, HandlerState}, badmatch}
                      catch Class:Reason ->
-                         error_info(Class, Reason, Route, Req, HandlerState),
+                         error_info(Class, {Reason, erlang:get_stacktrace()}, Route, Req, HandlerState),
                          {false, {500, <<>>, HandlerState}, {error, Reason}}
                      end;
               false -> {true, HandlerState}
@@ -189,7 +190,7 @@ authorization(Handler, Route, Req, HandlerState) ->
                                 badmatch_error_info(Else1, {Handler, has_permission, 3}, Route, Req, HandlerState2),
                                 {false, {500, <<>>, HandlerState2}, badmatch}
                         catch Class1:Reason1 ->
-                            error_info(Class1, Reason1, Route, Req, HandlerState2),
+                            error_info(Class1, {Reason1, erlang:get_stacktrace()}, Route, Req, HandlerState2),
                             {false, {500, <<>>, HandlerState2}, {error, Reason1}}
                         end;
                 false -> Res
@@ -254,7 +255,7 @@ handler_cross_domains(Handler, Route, Req, HandlerState) ->
                             badmatch_error_info(Else, {Handler, cross_domains, 3}, Route, Req, HandlerState),
                             throw(badmatch)
                     catch Class:Reason ->
-                        error_info(Class, Reason, Route, Req, HandlerState),
+                        error_info(Class, {Reason, erlang:get_stacktrace()}, Route, Req, HandlerState),
                         throw(Reason)
                     end
             end
@@ -440,4 +441,4 @@ error_info(Class, Reason, Route, Req, State) ->
                            "** Handler state == ~p~n"
                            "** Reason for termination ==~n"
                            "** ~p~n",
-                           [Class, self(), Route, Req, State, {Reason, erlang:get_stacktrace()}]).
+                           [Class, self(), Route, Req, State, Reason]).
