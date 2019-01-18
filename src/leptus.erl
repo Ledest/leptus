@@ -102,9 +102,9 @@ start_listener(Listener, Handlers, Opts, UserCowboyProtoOpts) ->
     %% basic listener configuration
     IP = opt(ip, Opts, {127, 0, 0, 1}),
     Port = opt(port, Opts, 8080),
-    ListenerFunc = get_listener_func(Listener),
-    case cowboy:ListenerFunc(get_ref(Listener), opt(nb_acceptors, Opts, 100), listener_opts(Listener, IP, Port, Opts),
-                             [{env, [{dispatch, Dispatch}]}|UserCowboyProtoOpts]) of
+    ListenerFun = get_listener_fun(Listener),
+    case ListenerFun(get_ref(Listener), opt(nb_acceptors, Opts, 100), listener_opts(Listener, IP, Port, Opts),
+                     [{env, [{dispatch, Dispatch}]}|UserCowboyProtoOpts]) of
         {ok, _} = Res ->
             update_listener_bucket({Listener,
                                     {Handlers, lists:foldl(fun({K, _} = O, A) -> lists:keystore(K, 1, A, O) end,
@@ -174,10 +174,12 @@ listener_uptime(Listener) ->
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
--spec get_listener_func(listener()) -> atom().
-get_listener_func(http) -> start_http;
-get_listener_func(https) -> start_https;
-get_listener_func(spdy) -> start_spdy.
+-spec get_listener_fun(listener()) ->
+          fun((ranch:ref(), non_neg_integer(), ranch_tcp:opts() | ranch_ssl:opts(), cowboy_protocol:opts()) ->
+              {ok, pid()} | {error, any()}).
+get_listener_fun(http) -> fun cowboy:start_http/4;
+get_listener_fun(https) -> fun cowboy:start_https/4;
+get_listener_fun(spdy) -> fun cowboy:start_spdy/4.
 
 -spec get_ref(listener()) -> ranch:ref().
 get_ref(http) -> leptus_http;
