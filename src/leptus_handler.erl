@@ -63,7 +63,7 @@ init(_, Req, Resrc) ->
     Method = leptus_req:method(ReqPid),
     {upgrade, protocol, ?MODULE, ReqPid,
      #state{resrc = Resrc, method = Method,
-            log_data = #log_data{method = Method, headers = cowboy_req:get(headers, Req)}}}.
+            log_data = #log_data{method = Method, headers = headers(Req)}}}.
 
 upgrade(Req, Env, _Handler,
         #state{resrc = #resrc{handler = Handler, route = Route, handler_state = HState} = Resrc} = State) ->
@@ -442,3 +442,8 @@ error_info(Class, Reason, Route, Req, State) ->
                            "** Reason for termination ==~n"
                            "** ~p~n",
                            [Class, self(), Route, Req, State, Reason]).
+
+headers(Req) ->
+    {Headers, _} = cowboy_req:headers(Req),
+    Headers.
+-compile({inline, [headers/1]}).
