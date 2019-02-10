@@ -71,57 +71,64 @@ start(Req) -> gen_server:start(?MODULE, Req, []).
 stop(Pid) -> gen_server:call(Pid, stop).
 
 -spec param(pid(), atom()) -> binary() | undefined.
-param(Pid, Key) -> invoke(Pid, binding, [Key]).
+param(Pid, Key) -> gen_server:call(Pid, {binding, Key}).
 
 -spec params(pid()) -> [{atom(), binary()}] | undefined.
-params(Pid) -> invoke(Pid, bindings, []).
+params(Pid) -> gen_server:call(Pid, bindings).
 
 -spec qs(pid()) -> binary().
-qs(Pid) -> invoke(Pid, qs, []).
+qs(Pid) -> gen_server:call(Pid, qs).
 
 -spec qs_val(pid(), binary()) -> binary() | undefined.
-qs_val(Pid, Key) -> invoke(Pid, qs_val, [Key]).
+qs_val(Pid, Key) ->
+    case lists:keyfind(Key, 1, qs_vals(Pid)) of
+        {_, V} -> V;
+        false -> undefined
+    end.
 
 -spec qs_vals(pid()) -> [{binary(), binary() | true}].
-qs_vals(Pid) -> invoke(Pid, qs_vals, []).
+qs_vals(Pid) -> cow_qs:parse_qs(qs(Pid)).
 
 -spec uri(pid()) -> binary().
 uri(Pid) ->
-    Path = invoke(Pid, path, []),
     %% e.g <<"/path?query=string">>
     case qs(Pid) of
-        <<>> -> Path;
-        QS -> <<Path/binary, "?", QS/binary>>
+        <<>> -> gen_server:call(Pid, path);
+        QS -> <<(gen_server:call(Pid, path))/binary, "?", QS/binary>>
     end.
 
 -spec version(pid()) -> cowboy:http_version().
-version(Pid) -> invoke(Pid, version, []).
+version(Pid) -> gen_server:call(Pid, version).
 
 -spec method(pid()) -> binary().
-method(Pid) -> invoke(Pid, method, []).
+method(Pid) -> gen_server:call(Pid, method).
 
 -spec body(pid()) -> binary() | [{binary(), binary() | true}] | jsx:json_term() | term().
 body(Pid) ->
-    Body = body_raw(Pid),
     case parse_header(Pid, <<"content-type">>) of
-        {<<"application">>, Type, _} -> body_decode(Type, Body);
-        _ -> Body
+        {<<"application">>, Type, _} -> body_decode(Type, body_raw(Pid));
+        _ -> body_raw(Pid)
     end.
 
--spec body_raw(pid()) -> binary().
-body_raw(Pid) -> invoke(Pid, body, []).
+-spec body_raw(pid()) -> binary() | {error, term()} | {more, binary()}.
+body_raw(Pid) -> gen_server:call(Pid, body).
 
--spec body_qs(pid()) -> [{binary(), binary() | true}].
-body_qs(Pid) -> invoke(Pid, body_qs, []).
+-spec body_qs(pid()) -> [{binary(), binary() | true}] | {error, term()}.
+body_qs(Pid) ->
+    case body_raw(Pid) of
+        B when is_binary(B) -> cow_qs:parse_qs(B);
+        {more, _} -> {error, badlength};
+        B -> B
+    end.
 
 -spec header(pid(), binary()) -> binary() | undefined.
-header(Pid, Name) -> invoke(Pid, header, [Name]).
+header(Pid, Name) -> gen_server:call(Pid, {header, Name}).
 
 -spec header(pid(), binary(), Default) -> binary() | Default when Default :: any().
-header(Pid, Name, Default) -> invoke(Pid, header, [Name, Default]).
+header(Pid, Name, Default) -> gen_server:call(Pid, {header, Name, Default}).
 
 -spec parse_header(pid(), binary()) -> any() | undefined | {error, any()}.
-parse_header(Pid, Name) -> invoke(Pid, parse_header, [Name, undefined]).
+parse_header(Pid, Name) -> gen_server:call(Pid, {parse_header, Name}).
 
 -spec auth(pid(), basic) -> {binary(), binary()} | undefined | {error, any()}.
 auth(Pid, basic) ->
@@ -131,10 +138,10 @@ auth(Pid, basic) ->
     end.
 
 -spec peer(pid()) -> {inet:ip_address(), inet:port_number()}.
-peer(Pid) -> invoke(Pid, peer, []).
+peer(Pid) -> gen_server:call(Pid, peer).
 
 -spec reply(pid(), cowboy:http_status(), cowboy:http_headers(), iodata()) -> ok.
-reply(Pid, Status, Headers, Body) -> invoke(Pid, reply, [Status, Headers, Body]).
+reply(Pid, Status, Headers, Body) -> gen_server:call(Pid, {reply, Status, Headers, Body}).
 
 -spec get_req(pid()) -> cowboy_req:req().
 get_req(Pid) -> gen_server:call(Pid, get_req).
@@ -149,11 +156,32 @@ init(Req) -> {ok, Req}.
 
 handle_call(stop, _From, Req) -> {stop, shutdown, ok, Req};
 handle_call(get_req, _From, Req) -> {reply, Req, Req};
+handle_call(body, _From, Req) ->
+    case cowboy_req:body(Req) of
+        {more, B, R} -> {reply, {more, B}, R};
+        {ok, B, R} -> {reply, B, R};
+        {error, _} = E -> {reply, E, Req}
+    end;
+handle_call({reply, Status, Headers, Body}, _From, Req) ->
+    {ok, R} = cowboy_req:reply(Status, Headers, Body, Req),
+    {reply, ok, R};
+handle_call({header, Name, Default}, _From, Req) ->
+    {V, R} = cowboy_req:header(Name, Default, Req),
+    {reply, V, R};
+handle_call({parse_header, Name}, _From, Req) ->
+    case cowboy_req:parse_header(Name, Req) of
+        {T, V, R} when T =:= ok; T =:= undefined -> {reply, V, R};
+        {error, _} = E -> {reply, E, Req}
+    end;
+% binding, header
 handle_call({F, A}, _From, Req) ->
-    case call_cowboy_req(F, A, Req) of
-        {error, _} = E -> {reply, E, Req};
-        {Value, Req1} -> {reply, Value, Req1}
-    end.
+    {V, R} = cowboy_req:F(A, Req),
+    {reply, V, R};
+% bindings, method, path, peer, qs, version
+handle_call(F, _From, Req) when is_atom(F) ->
+    {V, R} = cowboy_req:F(Req),
+    {reply, V, R};
+handle_call(_Msg, _From, Req) -> {noreply, Req}.
 
 handle_cast({set_req, NewReq}, _Req) -> {noreply, NewReq};
 handle_cast(_Msg, Req) -> {noreply, Req}.
@@ -167,23 +195,6 @@ code_change(_OldVsn, Req, _Extra) -> {ok, Req}.
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
--spec invoke(pid(), atom(), [any()]) -> any().
-invoke(Pid, F, A) -> gen_server:call(Pid, {F, A}).
-
--spec call_cowboy_req(atom(), [any()], cowboy_req:req()) -> any().
-call_cowboy_req(reply, Args, Req) -> call_cowboy_req(reply, Args ++ [Req]);
-call_cowboy_req(F, [], Req) -> call_cowboy_req(F, [Req]);
-call_cowboy_req(F, [H|T], Req) -> call_cowboy_req(F, [H, Req|T]).
-
--spec call_cowboy_req(atom(), [any()]) -> any().
-call_cowboy_req(F, A) -> get_vr(apply(cowboy_req, F, A)).
-
-%% get value and req
--spec get_vr({atom(), any(), cowboy_req:req()} | {any(), cowboy_req:req()}) ->
-                    {any(), cowboy_req:req()}.
-get_vr({_, _} = Res) -> Res;
-get_vr({T, Value, Req}) when T =:= ok; T =:= undefined -> {Value, Req}.
-
 -spec body_decode(Type::binary(), Body::binary()) -> binary().
 body_decode(<<"x-www-form-urlencoded">>, Body) -> cow_qs:parse_qs(Body);
 body_decode(<<"json">>, Body) ->
