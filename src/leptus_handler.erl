@@ -66,7 +66,8 @@ init(_, Req, Resrc) ->
             log_data = #log_data{method = Method, headers = headers(Req)}}}.
 
 upgrade(Req, Env, _Handler,
-        #state{resrc = #resrc{handler = Handler, route = Route, handler_state = HState} = Resrc} = State) ->
+        #state{resrc = #resrc{handler = Handler, route = Route, handler_state = HState} = Resrc,
+               log_data = LogData} = State) ->
     {ok, #state{terminate_reason = TerminateReason, resrc = #resrc{handler_state = HState2}}} =
         try Handler:init(Route, Req, HState) of
             {ok, HState1} ->
@@ -86,10 +87,10 @@ upgrade(Req, Env, _Handler,
     receive
         {Status, ContentLength} ->
             {IP, _} = leptus_req:peer(Req),
-            LogData = (State#state.log_data)#log_data{ip = IP, version = leptus_req:version(Req),
-                                                      uri = leptus_req:uri(Req), status = Status,
-                                                      content_length = ContentLength, response_time = LocalTime},
-            lists:foreach(fun(T) -> spawn(leptus_logger, send_event, [T, LogData]) end, [access_log, debug_log])
+            LD = LogData#log_data{ip = IP, version = leptus_req:version(Req), uri = leptus_req:uri(Req),
+                                  status = Status, content_length = ContentLength, response_time = LocalTime},
+            lists:foreach(fun(T) -> spawn(leptus_logger, send_event, [T, LD]) end, [access_log, debug_log])
+    after 10 -> ok
     end,
     handler_terminate(TerminateReason, Handler, Route, Req, HState2),
     Req1 = leptus_req:get_req(Req),
