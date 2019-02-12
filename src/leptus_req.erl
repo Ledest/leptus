@@ -166,7 +166,7 @@ handle_call({reply, Status, Headers, Body}, _From, Req) ->
     {ok, R} = cowboy_req:reply(Status, Headers, Body, Req),
     {reply, ok, R};
 handle_call({header, Name, Default}, _From, Req) ->
-    {V, R} = cowboy_req:header(Name, Default, Req),
+    {V, R} = cowboy_req:header(Name, Req, Default),
     {reply, V, R};
 handle_call({parse_header, Name}, _From, Req) ->
     case cowboy_req:parse_header(Name, Req) of
