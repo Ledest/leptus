@@ -92,7 +92,7 @@
     Types:
 
     #+BEGIN_SRC erlang
-    Listener = http | https | spdy
+    Listener = http | https
     Bucket = #listener_bucket{}
     #+END_SRC
 
@@ -110,7 +110,7 @@
     Types:
 
     #+BEGIN_SRC erlang
-    Listener = http | https | spdy
+    Listener = http | https
     Handlers = [{module(), State :: any()}]
     #+END_SRC
 
@@ -129,5 +129,5 @@
     Types:
 
     #+BEGIN_SRC erlang
-    Listener = http | https | spdy
+    Listener = http | https
     #+END_SRC

@@ -44,7 +44,7 @@
     }.
     #+END_SRC
 
-    Note: For HTTPS and SPDY you also need to specify ~cacertfile~, ~certfile~
+    Note: For HTTPS you also need to specify ~cacertfile~, ~certfile~
     and ~keyfile~:
 
     #+BEGIN_SRC erlang

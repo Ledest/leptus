@@ -14,7 +14,7 @@
    :END:
 
    #+BEGIN_SRC erlang
-   Listener          = http | https | spdy
+   Listener          = http | https
    AppName           = atom()
    HandlersOrAppName = Handlers | AppName
 

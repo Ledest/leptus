@@ -45,7 +45,7 @@
 -export_type([handler/0]).
 -export_type([handlers/0]).
 
--type listener() :: http | https | spdy.
+-type listener() :: http | https.
 -type static_directory() :: Dir :: file:name() | {priv_dir, App :: atom(), Dir :: file:name()}.
 -type option() :: {nb_acceptors, non_neg_integer()} |
                   {ip, inet:ip_address()} |
@@ -178,13 +178,11 @@ listener_uptime(Listener) ->
           fun((ranch:ref(), non_neg_integer(), ranch_tcp:opts() | ranch_ssl:opts(), cowboy_protocol:opts()) ->
               {ok, pid()} | {error, any()}).
 get_listener_fun(http) -> fun cowboy:start_http/4;
-get_listener_fun(https) -> fun cowboy:start_https/4;
-get_listener_fun(spdy) -> fun cowboy:start_spdy/4.
+get_listener_fun(https) -> fun cowboy:start_https/4.
 
 -spec get_ref(listener()) -> ranch:ref().
 get_ref(http) -> leptus_http;
-get_ref(https) -> leptus_https;
-get_ref(spdy) -> leptus_spdy.
+get_ref(https) -> leptus_https.
 
 %% -----------------------------------------------------------------------------
 %% listener options
@@ -210,7 +208,6 @@ opt(Key, Opts, Default) ->
 %% print the version number and what ip/port it's started on
 %% -----------------------------------------------------------------------------
 -spec print_info(listener(), inet:ip_address(), inet:portn_number()) -> ok.
-print_info(spdy, IP, Port) -> print_info(https, IP, Port);
 print_info(Listener, IP, Port) ->
     {ok, Vsn} = application:get_key(leptus, vsn),
     io:format("Leptus ~s started on ~s://~s:~B~n", [Vsn, Listener, inet_parse:ntoa(IP), Port]).
