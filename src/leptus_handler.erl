@@ -74,12 +74,12 @@ upgrade(Req, Env, _Handler,
                 handle_request(http_method(State#state.method), Req,
                                State#state{resrc = Resrc#resrc{handler_state = HState1}});
             Else ->
-                reply(500, [], <<>>, Req),
+                reply(500, Req),
                 badmatch_error_info(Else, {Handler, init, 3}, Route, Req, State),
                 {ok, State#state{terminate_reason = {error, badmatch}}}
         catch Class:Reason ->
             Stacktrace = erlang:get_stacktrace(),
-            reply(500, [], <<>>, Req),
+            reply(500, Req),
             error_info(Class, {Reason, Stacktrace}, Route, Req, HState),
             {ok, State#state{terminate_reason = {error, Reason}}}
         end,
@@ -304,7 +304,7 @@ handle_response(Status, Headers, Body, Req, #state{resrc = #resrc{handler = Hand
                  reply(status(Status), Headers1 ++ Headers2, Body1, Req),
                  State#state{resrc = Resrc#resrc{handler_state = HandlerState1}}
          catch _:Reason ->
-             reply(500, [], <<>>, Req),
+             reply(500, Req),
              State#state{terminate_reason = {error, Reason}}
          end}.
 
@@ -313,6 +313,12 @@ reply(Status, Headers, Body, Req) ->
     %% used in upgrade/4 for logging purposes
     self() ! {Status, iolist_size(Body)},
     leptus_req:reply(Req, Status, Headers, Body).
+
+-spec reply(status(), req()) -> ok.
+reply(Status, Req) ->
+    %% used in upgrade/4 for logging purposes
+    self() ! {Status, 0},
+    leptus_req:reply(Req, Status).
 
 -spec prepare_headers_body(headers(), body()) -> {headers(), body()}.
 prepare_headers_body(Headers, {Type, Body}) when Type =:= erlang; Type =:= etf ->
