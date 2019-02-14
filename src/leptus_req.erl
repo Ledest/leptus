@@ -41,7 +41,7 @@
          parse_header/2,
          auth/2,
          peer/1,
-         reply/4,
+         reply/2, reply/4,
          get_req/1,
          set_req/2]).
 
@@ -137,6 +137,9 @@ auth(Pid, basic) ->
 -spec peer(pid()) -> {inet:ip_address(), inet:port_number()}.
 peer(Pid) -> gen_server:call(Pid, peer).
 
+-spec reply(pid(), cowboy:http_status()) -> ok.
+reply(Pid, Status) -> gen_server:call(Pid, {reply, Status}).
+
 -spec reply(pid(), cowboy:http_status(), cowboy:http_headers(), iodata()) -> ok.
 reply(Pid, Status, Headers, Body) -> gen_server:call(Pid, {reply, Status, Headers, Body}).
 
@@ -170,7 +173,7 @@ handle_call({parse_header, Name}, _From, Req) ->
         {T, V, R} when T =:= ok; T =:= undefined -> {reply, V, R};
         {error, _} = E -> {reply, E, Req}
     end;
-% binding, header
+% binding, header, reply
 handle_call({F, A}, _From, Req) ->
     {V, R} = cowboy_req:F(A, Req),
     {reply, V, R};
