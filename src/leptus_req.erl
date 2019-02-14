@@ -25,38 +25,35 @@
 %% -----------------------------------------------------------------------------
 %% API
 %% -----------------------------------------------------------------------------
--export([start_link/1]).
--export([start/1]).
--export([stop/1]).
--export([param/2]).
--export([params/1]).
--export([qs/1]).
--export([qs_val/2]).
--export([qs_vals/1]).
--export([uri/1]).
--export([version/1]).
--export([method/1]).
--export([body/1]).
--export([body_raw/1]).
--export([body_qs/1]).
--export([header/2]).
--export([header/3]).
--export([parse_header/2]).
--export([auth/2]).
--export([peer/1]).
--export([reply/4]).
--export([get_req/1]).
--export([set_req/2]).
+-export([start_link/1, start/1, stop/1]).
+-export([param/2,
+         params/1,
+         qs/1,
+         qs_val/2,
+         qs_vals/1,
+         uri/1,
+         version/1,
+         method/1,
+         body/1,
+         body_raw/1,
+         body_qs/1,
+         header/2, header/3,
+         parse_header/2,
+         auth/2,
+         peer/1,
+         reply/4,
+         get_req/1,
+         set_req/2]).
 
 %% -----------------------------------------------------------------------------
 %% gen_server callbacks
 %% -----------------------------------------------------------------------------
--export([init/1]).
--export([handle_call/3]).
--export([handle_cast/2]).
--export([handle_info/2]).
--export([terminate/2]).
--export([code_change/3]).
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3]).
 
 %% -----------------------------------------------------------------------------
 %% API
