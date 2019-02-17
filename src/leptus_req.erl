@@ -68,13 +68,13 @@ start(Req) -> gen_server:start(?MODULE, Req, []).
 stop(Pid) -> gen_server:call(Pid, stop).
 
 -spec param(pid(), atom()) -> binary() | undefined.
-param(Pid, Key) -> gen_server:call(Pid, {binding, Key}).
+param(Pid, Key) -> get(Pid, binding, Key).
 
 -spec params(pid()) -> [{atom(), binary()}] | undefined.
-params(Pid) -> gen_server:call(Pid, bindings).
+params(Pid) -> get(Pid, bindings).
 
 -spec qs(pid()) -> binary().
-qs(Pid) -> gen_server:call(Pid, qs).
+qs(Pid) -> get(Pid, qs).
 
 -spec qs_val(pid(), binary()) -> binary() | undefined.
 qs_val(Pid, Key) ->
@@ -90,15 +90,15 @@ qs_vals(Pid) -> cow_qs:parse_qs(qs(Pid)).
 uri(Pid) ->
     %% e.g <<"/path?query=string">>
     case qs(Pid) of
-        <<>> -> gen_server:call(Pid, path);
-        QS -> <<(gen_server:call(Pid, path))/binary, "?", QS/binary>>
+        <<>> -> get(Pid, path);
+        QS -> <<(get(Pid, path))/binary, "?", QS/binary>>
     end.
 
 -spec version(pid()) -> cowboy:http_version().
-version(Pid) -> gen_server:call(Pid, version).
+version(Pid) -> get(Pid, version).
 
 -spec method(pid()) -> binary().
-method(Pid) -> gen_server:call(Pid, method).
+method(Pid) -> get(Pid, method).
 
 -spec body(pid()) -> binary() | [{binary(), binary() | true}] | jsx:json_term() | term().
 body(Pid) ->
@@ -119,13 +119,17 @@ body_qs(Pid) ->
     end.
 
 -spec header(pid(), binary()) -> binary() | undefined.
-header(Pid, Name) -> gen_server:call(Pid, {header, Name}).
+header(Pid, Name) -> get(Pid, header, Name).
 
 -spec header(pid(), binary(), Default) -> binary() | Default when Default :: any().
-header(Pid, Name, Default) -> gen_server:call(Pid, {header, Name, Default}).
+header(Pid, Name, Default) -> get(Pid, header, Name, Default).
 
 -spec parse_header(pid(), binary()) -> any() | undefined | {error, any()}.
-parse_header(Pid, Name) -> gen_server:call(Pid, {parse_header, Name}).
+parse_header(Pid, Name) ->
+    case cowboy_req:parse_header(Name, req(Pid)) of
+        {T, V, _} when T =:= ok; T =:= undefined -> V;
+        {error, _} = E -> E
+    end.
 
 -spec auth(pid(), basic) -> {binary(), binary()} | undefined | {error, any()}.
 auth(Pid, basic) ->
@@ -135,7 +139,7 @@ auth(Pid, basic) ->
     end.
 
 -spec peer(pid()) -> {inet:ip_address(), inet:port_number()}.
-peer(Pid) -> gen_server:call(Pid, peer).
+peer(Pid) -> get(Pid, peer).
 
 -spec reply(pid(), cowboy:http_status()) -> ok.
 reply(Pid, Status) -> gen_server:call(Pid, {reply, Status}).
@@ -144,10 +148,10 @@ reply(Pid, Status) -> gen_server:call(Pid, {reply, Status}).
 reply(Pid, Status, Headers, Body) -> gen_server:call(Pid, {reply, Status, Headers, Body}).
 
 -spec get_req(pid()) -> cowboy_req:req().
-get_req(Pid) -> gen_server:call(Pid, get_req).
+get_req(Pid) -> req(Pid).
 
 -spec set_req(pid(), cowboy_req:req()) -> ok.
-set_req(Pid, Req) -> gen_server:cast(Pid, {set_req, Req}).
+set_req(Pid, Req) -> req(Pid, Req).
 
 %% -----------------------------------------------------------------------------
 %% gen_server callbacks
@@ -155,35 +159,22 @@ set_req(Pid, Req) -> gen_server:cast(Pid, {set_req, Req}).
 init(Req) -> {ok, Req}.
 
 handle_call(stop, _From, Req) -> {stop, shutdown, ok, Req};
-handle_call(get_req, _From, Req) -> {reply, Req, Req};
+handle_call(req, _From, Req) -> {reply, Req, Req};
 handle_call(body, _From, Req) ->
     case cowboy_req:body(Req) of
-        {more, B, R} -> {reply, {more, B}, R};
         {ok, B, R} -> {reply, B, R};
-        {error, _} = E -> {reply, E, Req}
+        {error, _} = E -> {reply, E, Req};
+        {more, _, R} -> {reply, {error, badlength}, R}
     end;
 handle_call({reply, Status, Headers, Body}, _From, Req) ->
     {ok, R} = cowboy_req:reply(Status, Headers, Body, Req),
     {reply, ok, R};
-handle_call({header, Name, Default}, _From, Req) ->
-    {V, R} = cowboy_req:header(Name, Req, Default),
-    {reply, V, R};
-handle_call({parse_header, Name}, _From, Req) ->
-    case cowboy_req:parse_header(Name, Req) of
-        {T, V, R} when T =:= ok; T =:= undefined -> {reply, V, R};
-        {error, _} = E -> {reply, E, Req}
-    end;
-% binding, header, reply
-handle_call({F, A}, _From, Req) ->
-    {V, R} = cowboy_req:F(A, Req),
-    {reply, V, R};
-% bindings, method, path, peer, qs, version
-handle_call(F, _From, Req) when is_atom(F) ->
-    {V, R} = cowboy_req:F(Req),
-    {reply, V, R};
+handle_call({reply, Status}, _From, Req) ->
+    {ok, R} = cowboy_req:reply(Status, Req),
+    {reply, ok, R};
 handle_call(_Msg, _From, Req) -> {noreply, Req}.
 
-handle_cast({set_req, NewReq}, _Req) -> {noreply, NewReq};
+handle_cast({req, Req}, _) -> {noreply, Req};
 handle_cast(_Msg, Req) -> {noreply, Req}.
 
 handle_info(_Info, Req) -> {noreply, Req}.
@@ -195,6 +186,27 @@ code_change(_OldVsn, Req, _Extra) -> {ok, Req}.
 %% -----------------------------------------------------------------------------
 %% internal
 %% -----------------------------------------------------------------------------
+-spec req(pid()) -> cowboy_req:req().
+req(Pid) -> gen_server:call(Pid, req).
+
+-spec req(pid, cowboy_req:req()) -> ok.
+req(Pid, Req) -> gen_server:cast(Pid, {req, Req}).
+
+-spec get(pid(), atom()) -> any().
+get(Pid, F) ->
+    {V, _} = cowboy_req:F(req(Pid)),
+    V.
+
+-spec get(pid(), atom(), any()) -> any().
+get(Pid, F, A) ->
+    {V, _} = cowboy_req:F(A, req(Pid)),
+    V.
+
+-spec get(pid(), atom(), any(), any()) -> any().
+get(Pid, F, A, D) ->
+    {V, _} = cowboy_req:F(A, req(Pid), D),
+    V.
+
 -spec body_decode(Type::binary(), Body::binary()) -> binary().
 body_decode(<<"x-www-form-urlencoded">>, Body) -> cow_qs:parse_qs(Body);
 body_decode(<<"json">>, Body) ->
