@@ -93,9 +93,7 @@ upgrade(Req, Env, _Handler,
     after 10 -> ok
     end,
     handler_terminate(TerminateReason, Handler, Route, Req, HState2),
-    Req1 = leptus_req:get_req(Req),
-    leptus_req:stop(Req),
-    {ok, Req1, Env}.
+    {ok, leptus_req:stop(Req), Env}.
 
 %% -----------------------------------------------------------------------------
 %% internal
