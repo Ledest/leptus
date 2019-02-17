@@ -158,7 +158,7 @@ set_req(Pid, Req) -> req(Pid, Req).
 %% -----------------------------------------------------------------------------
 init(Req) -> {ok, Req}.
 
-handle_call(stop, _From, Req) -> {stop, shutdown, ok, Req};
+handle_call(stop, _From, Req) -> {stop, shutdown, Req, Req};
 handle_call(req, _From, Req) -> {reply, Req, Req};
 handle_call(body, _From, Req) ->
     case cowboy_req:body(Req) of
