@@ -68,7 +68,7 @@ init(_, Req, Resrc) ->
 upgrade(Req, Env, _Handler,
         #state{resrc = #resrc{handler = Handler, route = Route, handler_state = HState} = Resrc,
                log_data = LogData} = State) ->
-    {ok, #state{terminate_reason = TerminateReason, resrc = #resrc{handler_state = HState2}}} =
+    #state{terminate_reason = TerminateReason, resrc = #resrc{handler_state = HState2}} =
         try Handler:init(Route, Req, HState) of
             {ok, HState1} ->
                 handle_request(http_method(State#state.method), Req,
@@ -76,12 +76,12 @@ upgrade(Req, Env, _Handler,
             Else ->
                 reply(500, Req),
                 badmatch_error_info(Else, {Handler, init, 3}, Route, Req, State),
-                {ok, State#state{terminate_reason = {error, badmatch}}}
+                State#state{terminate_reason = {error, badmatch}}
         catch Class:Reason ->
             Stacktrace = erlang:get_stacktrace(),
             reply(500, Req),
             error_info(Class, {Reason, Stacktrace}, Route, Req, HState),
-            {ok, State#state{terminate_reason = {error, Reason}}}
+            State#state{terminate_reason = {error, Reason}}
         end,
     LocalTime = erlang:localtime(),
     receive
@@ -113,7 +113,7 @@ http_method(_) -> not_allowed.
 %% -----------------------------------------------------------------------------
 %% Handler:Method/3 (Method :: get | put | post | delete)
 %% -----------------------------------------------------------------------------
--spec handle_request(not_allowed | options | method(), req(), state()) -> {ok, state()}.
+-spec handle_request(not_allowed | options | method(), req(), state()) -> state().
 handle_request(not_allowed, Req,
                #state{resrc = #resrc{handler_state = HandlerState, handler = Handler, route = Route}} = State) ->
     handle_response(method_not_allowed(Handler, Route, HandlerState), Req, State#state{terminate_reason = not_allowed});
@@ -280,7 +280,7 @@ handler_terminate(Reason, Handler, Route, Req, HandlerState) -> Handler:terminat
 %% -----------------------------------------------------------------------------
 %% reply - prepare stauts, headers and body
 %% -----------------------------------------------------------------------------
--spec handle_response(response(), req(), state()) -> {ok, state()}.
+-spec handle_response(response(), req(), state()) -> state().
 handle_response({Body, HandlerState}, Req, #state{resrc = Resrc} = State) ->
     handle_response(200, [], Body, Req, State#state{resrc = Resrc#resrc{handler_state = HandlerState}});
 handle_response({Status, Body, HandlerState}, Req, #state{resrc = Resrc} = State) ->
@@ -288,23 +288,23 @@ handle_response({Status, Body, HandlerState}, Req, #state{resrc = Resrc} = State
 handle_response({Status, Headers, Body, HandlerState}, Req, #state{resrc = Resrc} = State) ->
     handle_response(Status, Headers, Body, Req, State#state{resrc = Resrc#resrc{handler_state = HandlerState}}).
 
--spec handle_response(status(), headers(), body(), req(), state()) -> {ok, state()}.
+-spec handle_response(status(), headers(), body(), req(), state()) -> state().
 handle_response(Status, Headers, Body, Req, #state{terminate_reason = {error, _}} = State) ->
     reply(Status, Headers, Body, Req),
-    {ok, State};
+    State;
 handle_response(Status, Headers, Body, Req, #state{resrc = #resrc{handler = Handler, route = Route,
                                                                   handler_state = HandlerState} = Resrc} = State) ->
     %% enable or disable cross-domain requests
-    {ok, try handler_cross_domains(Handler, Route, Req, HandlerState) of
-             {Headers2, HandlerState1} ->
-                 %% encode Body and set content-type
-                 {Headers1, Body1} = prepare_headers_body(Headers, Body),
-                 reply(status(Status), Headers1 ++ Headers2, Body1, Req),
-                 State#state{resrc = Resrc#resrc{handler_state = HandlerState1}}
-         catch _:Reason ->
-             reply(500, Req),
-             State#state{terminate_reason = {error, Reason}}
-         end}.
+    try handler_cross_domains(Handler, Route, Req, HandlerState) of
+        {Headers2, HandlerState1} ->
+            %% encode Body and set content-type
+            {Headers1, Body1} = prepare_headers_body(Headers, Body),
+            reply(status(Status), Headers1 ++ Headers2, Body1, Req),
+            State#state{resrc = Resrc#resrc{handler_state = HandlerState1}}
+    catch _:Reason ->
+        reply(500, Req),
+        State#state{terminate_reason = {error, Reason}}
+    end.
 
 -spec reply(status(), headers(), body(), req()) -> ok.
 reply(Status, Headers, Body, Req) ->
