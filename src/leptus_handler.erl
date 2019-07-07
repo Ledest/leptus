@@ -20,6 +20,12 @@
 
 -module(leptus_handler).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 21).
+-compile({nowarn_deprecated_function, {erlang, get_stacktrace, 0}}).
+-endif.
+-endif.
+
 %% -----------------------------------------------------------------------------
 %% cowboy callbacks
 %% -----------------------------------------------------------------------------
